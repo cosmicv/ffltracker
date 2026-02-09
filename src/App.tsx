@@ -5,6 +5,7 @@ import { SignupPage } from './pages/SignupPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { BorrowerDashboard } from './pages/BorrowerDashboard';
 import { SubscriptionPage } from './pages/SubscriptionPage';
+import { SuccessPage } from './pages/SuccessPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -26,6 +27,10 @@ function App() {
         <Route
           path="/subscription"
           element={user ? <SubscriptionPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/success"
+          element={user ? <SuccessPage /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/"

@@ -58,7 +58,8 @@ export function useSubscription() {
     return product?.name || null;
   };
 
-  const isActive = subscription?.subscription_status === 'active';
+  const status = subscription?.subscription_status;
+  const isActive = status === 'active' || status === 'trialing';
 
   return {
     subscription,

@@ -165,8 +165,10 @@ export function SubscriptionPage() {
         ) : (
           <div className="space-y-8">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Choose Your Plan</h1>
-              <p className="mt-2 text-gray-500">Select the perfect plan for your needs</p>
+              <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Admin Subscription</h1>
+              <p className="mt-2 text-gray-500 max-w-md mx-auto">
+                Only admin users who create and manage loans need a subscription. Borrowers always have free access.
+              </p>
             </div>
 
             <div className="max-w-lg mx-auto">
@@ -178,6 +180,15 @@ export function SubscriptionPage() {
                   activeSubscriptionName={activeSubscriptionName}
                 />
               ))}
+            </div>
+
+            <div className="max-w-lg mx-auto">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800 font-medium mb-1">How cancellation works</p>
+                <p className="text-sm text-blue-700">
+                  You can cancel anytime from this page. If you cancel, your subscription stays active through the end of the year you already paid for. You will not be charged again.
+                </p>
+              </div>
             </div>
           </div>
         )}

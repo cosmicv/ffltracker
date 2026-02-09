@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { DollarSign, CheckCircle, LogOut, MessageCircle, CreditCard } from 'lucide-react';
+import { DollarSign, CheckCircle, LogOut, MessageCircle } from 'lucide-react';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
 
@@ -11,7 +10,6 @@ type Loan = Database['public']['Tables']['loans']['Row'];
 
 export const BorrowerDashboard = () => {
   const { profile, signOut } = useAuth();
-  const navigate = useNavigate();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
@@ -55,13 +53,6 @@ export const BorrowerDashboard = () => {
               <span className="text-xs sm:text-sm text-gray-600 truncate max-w-[150px] sm:max-w-none">
                 {profile?.full_name}
               </span>
-              <button
-                onClick={() => navigate('/subscription')}
-                className="flex items-center text-gray-600 hover:text-gray-900 transition"
-                title="Subscription"
-              >
-                <CreditCard className="w-5 h-5" />
-              </button>
               <button
                 onClick={signOut}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition"

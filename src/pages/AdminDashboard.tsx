@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, CreditCard } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, CreditCard, AlertTriangle, Calendar, Check } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
@@ -13,6 +14,7 @@ type Loan = Database['public']['Tables']['loans']['Row'];
 
 export const AdminDashboard = () => {
   const { profile, signOut } = useAuth();
+  const { subscription, loading: subLoading, isActive } = useSubscription();
   const navigate = useNavigate();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,7 @@ export const AdminDashboard = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'loans' | 'users'>('loans');
   const isMasterAdmin = profile?.role === 'master_admin';
+  const requiresSubscription = !isMasterAdmin && !isActive;
   const [stats, setStats] = useState({
     totalLoans: 0,
     totalAmount: 0,
@@ -61,6 +64,14 @@ export const AdminDashboard = () => {
     });
   };
 
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -97,119 +108,190 @@ export const AdminDashboard = () => {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Loans</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalLoans}</p>
+        {requiresSubscription ? (
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Subscription Required</h2>
+              <p className="text-gray-600">
+                To create and manage loans, you need an active subscription. Subscribe for just $20/year to unlock all admin features.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">FFLTracker Yearly Plan</h3>
+                  <div className="text-right">
+                    <span className="text-3xl font-bold text-gray-900">$20</span>
+                    <span className="text-gray-500 ml-1">/year</span>
+                  </div>
                 </div>
-                <Users className="w-10 h-10 text-blue-500 opacity-80" />
+                <p className="text-gray-600 text-sm">Everything you need to track loans with family and friends</p>
+              </div>
+
+              <div className="p-6 space-y-3">
+                {[
+                  'Create and manage unlimited loans',
+                  'Track repayment schedules',
+                  'Automatic payment reminders via email',
+                  'Invite borrowers to view their loans',
+                  'Full dashboard with loan analytics',
+                ].map((feature) => (
+                  <div key={feature} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 text-green-600" />
+                    </div>
+                    <span className="text-sm text-gray-700">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-6 bg-gray-50 border-t border-gray-100">
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  Subscribe Now
+                </button>
+                <p className="text-center text-xs text-gray-500 mt-3">
+                  Cancel anytime. Your access continues through the end of your paid year.
+                </p>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
+            {subscription?.subscription_status === 'canceled' && (
+              <div className="mt-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <Calendar className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">${stats.totalAmount.toLocaleString()}</p>
+                  <p className="text-sm font-medium text-amber-800">Your subscription has expired</p>
+                  <p className="text-sm text-amber-700 mt-0.5">
+                    Renew your subscription to regain access to all admin features.
+                  </p>
                 </div>
-                <DollarSign className="w-10 h-10 text-green-500 opacity-80" />
               </div>
-            </div>
-
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Active Loans</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.activeLoans}</p>
-                </div>
-                <TrendingUp className="w-10 h-10 text-blue-500 opacity-80" />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Completed Loans</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.completedLoans}</p>
-                </div>
-                <PlusCircle className="w-10 h-10 text-green-500 opacity-80" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {isMasterAdmin && (
-          <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setActiveTab('loans')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === 'loans'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              Loans
-            </button>
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === 'users'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              User Management
-            </button>
-          </div>
-        )}
-
-        {activeTab === 'loans' ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6 gap-2">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Loans</h3>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm sm:text-base"
-              >
-                <PlusCircle className="w-5 h-5 sm:mr-2" />
-                <span className="hidden sm:inline">Create Loan</span>
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading loans...</p>
-              </div>
-            ) : (
-              <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Shield className="w-6 h-6 text-amber-600" />
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900">User Management</h3>
-            </div>
-            <UserManagement />
-          </div>
-        )}
+          <>
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Overview</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Total Loans</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.totalLoans}</p>
+                    </div>
+                    <Users className="w-10 h-10 text-blue-500 opacity-80" />
+                  </div>
+                </div>
 
-        <div className="mt-8 text-center pb-8">
-          <button
-            onClick={() => setShowFeedbackModal(true)}
-            className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
-          >
-            <MessageCircle className="w-5 h-5" />
-            Submit Feedback or Report an Issue
-          </button>
-        </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+                      <p className="text-2xl font-bold text-gray-900">${stats.totalAmount.toLocaleString()}</p>
+                    </div>
+                    <DollarSign className="w-10 h-10 text-green-500 opacity-80" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Active Loans</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.activeLoans}</p>
+                    </div>
+                    <TrendingUp className="w-10 h-10 text-blue-500 opacity-80" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Completed Loans</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.completedLoans}</p>
+                    </div>
+                    <PlusCircle className="w-10 h-10 text-green-500 opacity-80" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {isMasterAdmin && (
+              <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+                <button
+                  onClick={() => setActiveTab('loans')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'loans'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Loans
+                </button>
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'users'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  User Management
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'loans' ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex justify-between items-center mb-6 gap-2">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Loans</h3>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm sm:text-base"
+                  >
+                    <PlusCircle className="w-5 h-5 sm:mr-2" />
+                    <span className="hidden sm:inline">Create Loan</span>
+                  </button>
+                </div>
+
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading loans...</p>
+                  </div>
+                ) : (
+                  <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
+                )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Shield className="w-6 h-6 text-amber-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">User Management</h3>
+                </div>
+                <UserManagement />
+              </div>
+            )}
+
+            <div className="mt-8 text-center pb-8">
+              <button
+                onClick={() => setShowFeedbackModal(true)}
+                className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Submit Feedback or Report an Issue
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {showCreateModal && (
