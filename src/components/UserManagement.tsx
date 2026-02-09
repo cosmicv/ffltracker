@@ -72,10 +72,15 @@ export const UserManagement = () => {
         }
       );
 
-      const result = await response.json();
+      let result: Record<string, string>;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(`Server error (${response.status})`);
+      }
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete user');
+        throw new Error(result.error || result.msg || result.message || `Server error (${response.status})`);
       }
 
       setDeletedName(deleteTarget.full_name || deleteTarget.email);
