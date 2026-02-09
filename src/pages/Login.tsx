@@ -61,11 +61,12 @@ export const Login = ({ onToggle }: { onToggle: () => void }) => {
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-slate-800/40"></div>
         </div>
         <div className="w-full lg:w-1/2 p-8">
-        <div className="flex items-center justify-center mb-8">
+        <div className="flex items-center justify-center mb-4">
           <div className="bg-blue-600 p-3 rounded-full">
             <LogIn className="w-6 h-6 text-white" />
           </div>
         </div>
+        <h1 className="text-2xl font-bold text-center text-gray-900 mb-6">Family and Friends Loan Tracker</h1>
 
         {!showForgotPassword ? (
           <>
