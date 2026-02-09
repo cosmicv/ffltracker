@@ -1,5 +1,8 @@
 function App() {
   const { user, profile, loading } = useAuth();
+  
+  if (loading) {
+    return (
       <AppContent />
     );
   }
@@ -23,6 +26,9 @@ function App() {
   return (
     <ProtectedRoute allowedRoles={['borrower']}>
       <BorrowerDashboard />
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
     </ProtectedRoute>
+  );
+}
+
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
