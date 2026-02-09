@@ -61,7 +61,7 @@ export const AdminDashboard = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <DollarSign className="w-8 h-8 text-blue-600" />
-              <h1 className="ml-2 text-xl font-bold text-gray-900">Loan Tracker</h1>
+              <h1 className="ml-2 text-xl font-bold text-gray-900">Family and Friends Loan Tracker</h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <span className="text-xs sm:text-sm text-gray-600 flex items-center flex-wrap gap-1">
