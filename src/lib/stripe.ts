@@ -45,3 +45,27 @@ export async function createCheckoutSession({
 
   return response.json();
 }
+
+export async function createPortalSession(returnUrl: string): Promise<{ url: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('User not authenticated');
+  }
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-portal`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ return_url: returnUrl }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to open subscription management');
+  }
+
+  return response.json();
+}

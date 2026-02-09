@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, CreditCard } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
@@ -12,6 +13,7 @@ type Loan = Database['public']['Tables']['loans']['Row'];
 
 export const AdminDashboard = () => {
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -75,6 +77,13 @@ export const AdminDashboard = () => {
                   {isMasterAdmin ? 'Master Admin' : 'Admin'}
                 </span>
               </span>
+              <button
+                onClick={() => navigate('/subscription')}
+                className="flex items-center text-gray-600 hover:text-gray-900 transition"
+                title="Subscription"
+              >
+                <CreditCard className="w-5 h-5" />
+              </button>
               <button
                 onClick={signOut}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition"
