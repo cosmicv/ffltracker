@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
+import { UserManagement } from '../components/UserManagement';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 
@@ -15,6 +16,8 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'loans' | 'users'>('loans');
+  const isMasterAdmin = profile?.role === 'master_admin';
   const [stats, setStats] = useState({
     totalLoans: 0,
     totalAmount: 0,
@@ -68,7 +71,9 @@ export const AdminDashboard = () => {
             <div className="flex items-center space-x-2 sm:space-x-4">
               <span className="text-xs sm:text-sm text-gray-600 flex items-center flex-wrap gap-1">
                 <span className="hidden sm:inline">{profile?.full_name}</span>
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Admin</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${isMasterAdmin ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                  {isMasterAdmin ? 'Master Admin' : 'Admin'}
+                </span>
               </span>
               <button
                 onClick={signOut}
@@ -128,27 +133,64 @@ export const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6 gap-2">
-            <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Loans</h3>
+        {isMasterAdmin && (
+          <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm sm:text-base"
+              onClick={() => setActiveTab('loans')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === 'loans'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <PlusCircle className="w-5 h-5 sm:mr-2" />
-              <span className="hidden sm:inline">Create Loan</span>
+              <DollarSign className="w-4 h-4" />
+              Loans
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === 'users'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              User Management
             </button>
           </div>
+        )}
 
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading loans...</p>
+        {activeTab === 'loans' ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex justify-between items-center mb-6 gap-2">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Loans</h3>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm sm:text-base"
+              >
+                <PlusCircle className="w-5 h-5 sm:mr-2" />
+                <span className="hidden sm:inline">Create Loan</span>
+              </button>
             </div>
-          ) : (
-            <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
-          )}
-        </div>
+
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading loans...</p>
+              </div>
+            ) : (
+              <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
+            )}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Shield className="w-6 h-6 text-amber-600" />
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900">User Management</h3>
+            </div>
+            <UserManagement />
+          </div>
+        )}
 
         <div className="mt-8 text-center pb-8">
           <button

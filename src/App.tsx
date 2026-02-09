@@ -26,8 +26,8 @@ function App() {
           path="/"
           element={
             user ? (
-              profile?.role === 'admin' ? (
-                <ProtectedRoute allowedRoles={['admin']}>
+              profile?.role === 'admin' || profile?.role === 'master_admin' ? (
+                <ProtectedRoute allowedRoles={['admin', 'master_admin']}>
                   <AdminDashboard />
                 </ProtectedRoute>
               ) : (

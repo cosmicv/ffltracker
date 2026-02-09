@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type UserRole = 'admin' | 'borrower';
+export type UserRole = 'admin' | 'borrower' | 'master_admin';
 export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected';
 export type RepaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
 export type FeedbackType = 'feature_request' | 'problem_report';
