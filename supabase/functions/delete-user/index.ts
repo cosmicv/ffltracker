@@ -86,16 +86,35 @@ Deno.serve(async (req: Request) => {
 
     if (userLoans && userLoans.length > 0) {
       const loanIds = userLoans.map((l: { id: string }) => l.id);
-      await callerClient.from("repayments").delete().in("loan_id", loanIds);
+      const { error: repErr } = await callerClient.from("repayments").delete().in("loan_id", loanIds);
+      if (repErr) throw new Error(`Failed to delete repayments: ${repErr.message}`);
     }
 
-    await callerClient
+    const { error: loanErr } = await callerClient
       .from("loans")
       .delete()
       .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
+    if (loanErr) throw new Error(`Failed to delete loans: ${loanErr.message}`);
 
-    await callerClient.from("feedback").delete().eq("user_id", userId);
-    await callerClient.from("profiles").delete().eq("id", userId);
+    const { error: feedbackErr } = await callerClient.from("feedback").delete().eq("user_id", userId);
+    if (feedbackErr) throw new Error(`Failed to delete feedback: ${feedbackErr.message}`);
+
+    const { data: stripeCustomer } = await callerClient
+      .from("stripe_customers")
+      .select("customer_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (stripeCustomer?.customer_id) {
+      await callerClient.from("stripe_subscriptions").delete().eq("customer_id", stripeCustomer.customer_id);
+      await callerClient.from("stripe_orders").delete().eq("customer_id", stripeCustomer.customer_id);
+    }
+
+    const { error: stripeErr } = await callerClient.from("stripe_customers").delete().eq("user_id", userId);
+    if (stripeErr) throw new Error(`Failed to delete stripe customer: ${stripeErr.message}`);
+
+    const { error: profileErr } = await callerClient.from("profiles").delete().eq("id", userId);
+    if (profileErr) throw new Error(`Failed to delete profile: ${profileErr.message}`);
 
     const { error: authError } =
       await callerClient.auth.admin.deleteUser(userId);
