@@ -34,8 +34,8 @@ export const Register = ({ onToggle }: { onToggle: () => void }) => {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl flex overflow-hidden">
         <div className="hidden lg:block lg:w-1/2 relative">
           <img
-            src="https://images.pexels.com/photos/1648387/pexels-photo-1648387.jpeg?auto=compress&cs=tinysrgb&w=1200"
-            alt="Father lifting child up"
+            src="/image.jpg"
+            alt="Financial support between generations"
             className="absolute inset-0 w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-slate-800/40"></div>
