@@ -79,13 +79,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    await callerClient.from("repayments").delete().in(
-      "loan_id",
-      callerClient
-        .from("loans")
-        .select("id")
-        .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`)
-    );
+    const { data: userLoans } = await callerClient
+      .from("loans")
+      .select("id")
+      .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
+
+    if (userLoans && userLoans.length > 0) {
+      const loanIds = userLoans.map((l: { id: string }) => l.id);
+      await callerClient.from("repayments").delete().in("loan_id", loanIds);
+    }
 
     await callerClient
       .from("loans")

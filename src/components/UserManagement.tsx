@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserRole } from '../types/database';
-import { Trash2, Users, Search, AlertTriangle, X, Shield, User } from 'lucide-react';
+import { Trash2, Users, Search, AlertTriangle, X, Shield, User, CheckCircle } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -17,6 +17,8 @@ export const UserManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [deletedName, setDeletedName] = useState('');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -75,8 +77,8 @@ export const UserManagement = () => {
         throw new Error(result.error || 'Failed to delete user');
       }
 
-      setSuccessMsg(`${deleteTarget.full_name || deleteTarget.email} has been removed`);
-      setDeleteTarget(null);
+      setDeletedName(deleteTarget.full_name || deleteTarget.email);
+      setDeleteSuccess(true);
       await fetchUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete user');
@@ -209,49 +211,84 @@ export const UserManagement = () => {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
-                <p className="text-sm text-gray-500">This action cannot be undone</p>
-              </div>
-            </div>
+            {deleteSuccess ? (
+              <>
+                <div className="flex flex-col items-center text-center py-4">
+                  <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                    <CheckCircle className="w-7 h-7 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">User Removed</h3>
+                  <p className="text-sm text-gray-500">
+                    <strong>{deletedName}</strong> has been successfully removed along with all associated data.
+                  </p>
+                </div>
+                <div className="flex justify-center mt-4">
+                  <button
+                    onClick={() => {
+                      setDeleteTarget(null);
+                      setDeleteSuccess(false);
+                      setDeletedName('');
+                    }}
+                    className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
+                    <p className="text-sm text-gray-500">This action cannot be undone</p>
+                  </div>
+                </div>
 
-            <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6">
-              <p className="text-sm text-red-800">
-                You are about to permanently delete <strong>{deleteTarget.full_name}</strong> ({deleteTarget.email}).
-                All their loans, repayments, and feedback will also be removed.
-              </p>
-            </div>
+                <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-red-800">
+                    You are about to permanently delete <strong>{deleteTarget.full_name}</strong> ({deleteTarget.email}).
+                    All their loans, repayments, and feedback will also be removed.
+                  </p>
+                </div>
 
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteUser}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                {deleting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    Delete User
-                  </>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-lg mb-4 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    {error}
+                  </div>
                 )}
-              </button>
-            </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => { setDeleteTarget(null); setError(''); }}
+                    disabled={deleting}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteUser}
+                    disabled={deleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Delete User
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
