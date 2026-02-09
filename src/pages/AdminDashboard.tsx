@@ -5,6 +5,7 @@ import { Database } from '../types/database';
 import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
+import { FeedbackModal } from '../components/FeedbackModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 
@@ -13,6 +14,7 @@ export const AdminDashboard = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [stats, setStats] = useState({
     totalLoans: 0,
     totalAmount: 0,
@@ -149,13 +151,13 @@ export const AdminDashboard = () => {
         </div>
 
         <div className="mt-8 text-center pb-8">
-          <a
-            href="mailto:cosmicvortex@gmail.com?subject=Feature Request / Problem Report&body=Please describe your feature request or problem:"
+          <button
+            onClick={() => setShowFeedbackModal(true)}
             className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
           >
             <MessageCircle className="w-5 h-5" />
             Submit Feedback or Report an Issue
-          </a>
+          </button>
         </div>
       </div>
 
@@ -167,6 +169,10 @@ export const AdminDashboard = () => {
             fetchLoans();
           }}
         />
+      )}
+
+      {showFeedbackModal && (
+        <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
       )}
     </div>
   );

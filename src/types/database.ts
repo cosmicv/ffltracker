@@ -9,6 +9,8 @@ export type Json =
 export type UserRole = 'admin' | 'borrower';
 export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected';
 export type RepaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
+export type FeedbackType = 'feature_request' | 'problem_report';
+export type FeedbackStatus = 'new' | 'reviewed';
 
 export interface Database {
   public: {
@@ -109,6 +111,38 @@ export interface Database {
           amount?: number;
           paid?: boolean;
           paid_at?: string | null;
+          created_at?: string;
+        };
+      };
+      feedback: {
+        Row: {
+          id: string;
+          user_id: string;
+          user_email: string;
+          user_name: string;
+          message: string;
+          type: FeedbackType;
+          status: FeedbackStatus;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          user_email: string;
+          user_name: string;
+          message: string;
+          type: FeedbackType;
+          status?: FeedbackStatus;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          user_email?: string;
+          user_name?: string;
+          message?: string;
+          type?: FeedbackType;
+          status?: FeedbackStatus;
           created_at?: string;
         };
       };

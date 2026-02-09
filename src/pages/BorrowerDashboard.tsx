@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { DollarSign, CheckCircle, LogOut, MessageCircle } from 'lucide-react';
 import { LoansList } from '../components/LoansList';
+import { FeedbackModal } from '../components/FeedbackModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 
@@ -12,6 +13,7 @@ export const BorrowerDashboard = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   useEffect(() => {
     fetchLoans();
@@ -97,15 +99,19 @@ export const BorrowerDashboard = () => {
         )}
 
         <div className="mt-8 text-center pb-8">
-          <a
-            href="mailto:cosmicvortex@gmail.com?subject=Feature Request / Problem Report&body=Please describe your feature request or problem:"
+          <button
+            onClick={() => setShowFeedbackModal(true)}
             className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
           >
             <MessageCircle className="w-5 h-5" />
             Submit Feedback or Report an Issue
-          </a>
+          </button>
         </div>
       </div>
+
+      {showFeedbackModal && (
+        <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
+      )}
     </div>
   );
 };
