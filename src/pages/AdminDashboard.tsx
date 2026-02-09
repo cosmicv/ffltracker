@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 
@@ -146,6 +146,16 @@ export const AdminDashboard = () => {
           ) : (
             <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
           )}
+        </div>
+
+        <div className="mt-8 text-center pb-8">
+          <a
+            href="mailto:cosmicvortex@gmail.com?subject=Feature Request / Problem Report&body=Please describe your feature request or problem:"
+            className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
+          >
+            <MessageCircle className="w-5 h-5" />
+            Submit Feedback or Report an Issue
+          </a>
         </div>
       </div>
 
