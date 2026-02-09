@@ -8,6 +8,13 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -16,127 +23,122 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Missing authorization" }, 401);
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    let callerId: string;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      callerId = payload.sub;
+    } catch {
+      return jsonResponse({ error: "Invalid token" }, 401);
+    }
+
+    if (!callerId) {
+      return jsonResponse({ error: "Invalid token payload" }, 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const callerClient = createClient(supabaseUrl, supabaseServiceKey);
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-    const anonClient = createClient(
-      supabaseUrl,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const {
-      data: { user: caller },
-    } = await anonClient.auth.getUser();
-
-    if (!caller) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: callerProfile } = await callerClient
+    const { data: callerProfile, error: profileError } = await adminClient
       .from("profiles")
       .select("role")
-      .eq("id", caller.id)
+      .eq("id", callerId)
       .maybeSingle();
 
+    if (profileError) {
+      return jsonResponse({ error: `Profile lookup failed: ${profileError.message}` }, 500);
+    }
+
     if (!callerProfile || callerProfile.role !== "master_admin") {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Forbidden: master_admin role required" }, 403);
     }
 
     const { userId } = await req.json();
 
     if (!userId) {
-      return new Response(
-        JSON.stringify({ error: "userId is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "userId is required" }, 400);
     }
 
-    if (userId === caller.id) {
-      return new Response(
-        JSON.stringify({ error: "Cannot delete yourself" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (userId === callerId) {
+      return jsonResponse({ error: "Cannot delete yourself" }, 400);
     }
 
-    const { data: userLoans } = await callerClient
+    const { data: userLoans } = await adminClient
       .from("loans")
       .select("id")
       .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
 
     if (userLoans && userLoans.length > 0) {
       const loanIds = userLoans.map((l: { id: string }) => l.id);
-      const { error: repErr } = await callerClient.from("repayments").delete().in("loan_id", loanIds);
-      if (repErr) throw new Error(`Failed to delete repayments: ${repErr.message}`);
+      const { error: repErr } = await adminClient
+        .from("repayments")
+        .delete()
+        .in("loan_id", loanIds);
+      if (repErr) {
+        return jsonResponse({ error: `Delete repayments failed: ${repErr.message}` }, 500);
+      }
     }
 
-    const { error: loanErr } = await callerClient
+    const { error: loanErr } = await adminClient
       .from("loans")
       .delete()
       .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
-    if (loanErr) throw new Error(`Failed to delete loans: ${loanErr.message}`);
+    if (loanErr) {
+      return jsonResponse({ error: `Delete loans failed: ${loanErr.message}` }, 500);
+    }
 
-    const { error: feedbackErr } = await callerClient.from("feedback").delete().eq("user_id", userId);
-    if (feedbackErr) throw new Error(`Failed to delete feedback: ${feedbackErr.message}`);
+    const { error: feedbackErr } = await adminClient
+      .from("feedback")
+      .delete()
+      .eq("user_id", userId);
+    if (feedbackErr) {
+      return jsonResponse({ error: `Delete feedback failed: ${feedbackErr.message}` }, 500);
+    }
 
-    const { data: stripeCustomer } = await callerClient
+    const { data: stripeCustomer } = await adminClient
       .from("stripe_customers")
       .select("customer_id")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (stripeCustomer?.customer_id) {
-      await callerClient.from("stripe_subscriptions").delete().eq("customer_id", stripeCustomer.customer_id);
-      await callerClient.from("stripe_orders").delete().eq("customer_id", stripeCustomer.customer_id);
+      await adminClient
+        .from("stripe_subscriptions")
+        .delete()
+        .eq("customer_id", stripeCustomer.customer_id);
+      await adminClient
+        .from("stripe_orders")
+        .delete()
+        .eq("customer_id", stripeCustomer.customer_id);
     }
 
-    const { error: stripeErr } = await callerClient.from("stripe_customers").delete().eq("user_id", userId);
-    if (stripeErr) throw new Error(`Failed to delete stripe customer: ${stripeErr.message}`);
+    await adminClient.from("stripe_customers").delete().eq("user_id", userId);
 
-    const { error: profileErr } = await callerClient.from("profiles").delete().eq("id", userId);
-    if (profileErr) throw new Error(`Failed to delete profile: ${profileErr.message}`);
+    const { error: profileDelErr } = await adminClient
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+    if (profileDelErr) {
+      return jsonResponse({ error: `Delete profile failed: ${profileDelErr.message}` }, 500);
+    }
 
-    const { error: authError } =
-      await callerClient.auth.admin.deleteUser(userId);
-
+    const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
     if (authError) {
-      return new Response(JSON.stringify({ error: authError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: `Delete auth user failed: ${authError.message}` }, 500);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ success: true });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+    return jsonResponse(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      500
     );
   }
 });

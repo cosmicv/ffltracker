@@ -56,16 +56,26 @@ export const UserManagement = () => {
     setError('');
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('delete-user', {
-        body: { userId: deleteTarget.id },
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (fnError) {
-        throw new Error(fnError.message || 'Failed to delete user');
-      }
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ userId: deleteTarget.id }),
+        }
+      );
 
-      if (data?.error) {
-        throw new Error(data.error);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
       }
 
       setDeletedName(deleteTarget.full_name || deleteTarget.email);
