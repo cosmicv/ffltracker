@@ -49,7 +49,7 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
           if (isAdmin && loan.borrower_email) {
             const { data: registrationStatus } = await supabase
               .rpc('check_borrower_registered', { borrower_email: loan.borrower_email });
-            isRegistered = registrationStatus || false;
+            isRegistered = registrationStatus?.[0]?.is_registered || false;
           }
 
           return {
