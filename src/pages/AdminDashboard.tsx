@@ -252,7 +252,7 @@ export const AdminDashboard = () => {
             {activeTab === 'loans' ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-6 gap-2">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Loans</h3>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Borrowers</h3>
                   <button
                     onClick={() => setShowCreateModal(true)}
                     className="flex items-center bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm sm:text-base"

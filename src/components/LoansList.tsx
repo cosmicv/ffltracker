@@ -1,16 +1,21 @@
 import { Database } from '../types/database';
-import { CheckCircle, XCircle, TrendingUp, Settings, UserCheck, UserX } from 'lucide-react';
+import { TrendingUp, CheckCircle, UserCheck, UserX, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LoanDetailsModal } from './LoanDetailsModal';
+import { BorrowerAccountModal } from './BorrowerAccountModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
-type Repayment = Database['public']['Tables']['repayments']['Row'];
 
-interface LoanWithPayments extends Loan {
+interface BorrowerGroup {
+  borrowerName: string;
+  borrowerEmail: string;
+  isRegistered: boolean;
+  loans: Loan[];
+  totalBorrowed: number;
   totalPaid: number;
   remainder: number;
-  isRegistered?: boolean;
+  activeLoans: number;
+  completedLoans: number;
 }
 
 interface LoansListProps {
@@ -20,15 +25,15 @@ interface LoansListProps {
 }
 
 export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
-  const [loansWithPayments, setLoansWithPayments] = useState<LoanWithPayments[]>([]);
+  const [borrowerGroups, setBorrowerGroups] = useState<BorrowerGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedBorrower, setSelectedBorrower] = useState<BorrowerGroup | null>(null);
 
   useEffect(() => {
-    fetchRepayments();
+    buildBorrowerGroups();
   }, [loans]);
 
-  const fetchRepayments = async () => {
+  const buildBorrowerGroups = async () => {
     setLoading(true);
     try {
       const loanIds = loans.map(l => l.id);
@@ -39,91 +44,78 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
 
       if (error) throw error;
 
-      const loansWithPaymentData = await Promise.all(
-        loans.map(async (loan) => {
-          const loanRepayments = (repayments || []).filter(r => r.loan_id === loan.id && r.paid);
-          const totalPaid = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-          const remainder = Number(loan.amount) - totalPaid;
+      const grouped = new Map<string, BorrowerGroup>();
 
+      for (const loan of loans) {
+        const key = loan.borrower_email.toLowerCase();
+        const loanRepayments = (repayments || []).filter(r => r.loan_id === loan.id && r.paid);
+        const paidForLoan = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+        const remainderForLoan = Number(loan.amount) - paidForLoan;
+
+        if (!grouped.has(key)) {
           let isRegistered = false;
           if (isAdmin && loan.borrower_email) {
-            const { data: registrationStatus } = await supabase
-              .rpc('check_borrower_registered', { borrower_email_param: loan.borrower_email });
-            isRegistered = registrationStatus?.[0]?.is_registered || false;
+            const { data } = await supabase.rpc('check_borrower_registered', {
+              borrower_email_param: loan.borrower_email,
+            });
+            isRegistered = data?.[0]?.is_registered || false;
           }
-
-          return {
-            ...loan,
-            totalPaid,
-            remainder,
+          grouped.set(key, {
+            borrowerName: loan.borrower_name,
+            borrowerEmail: loan.borrower_email,
             isRegistered,
-          };
-        })
-      );
+            loans: [],
+            totalBorrowed: 0,
+            totalPaid: 0,
+            remainder: 0,
+            activeLoans: 0,
+            completedLoans: 0,
+          });
+        }
 
-      setLoansWithPayments(loansWithPaymentData);
-    } catch (error) {
-      console.error('Error fetching repayments:', error);
-      setLoansWithPayments(loans.map(loan => ({
-        ...loan,
-        totalPaid: 0,
-        remainder: Number(loan.amount),
-        isRegistered: false,
-      })));
+        const group = grouped.get(key)!;
+        group.loans.push(loan);
+        group.totalBorrowed += Number(loan.amount);
+        group.totalPaid += paidForLoan;
+        group.remainder += remainderForLoan;
+        if (loan.status === 'active') group.activeLoans++;
+        if (loan.status === 'completed') group.completedLoans++;
+      }
+
+      setBorrowerGroups(Array.from(grouped.values()));
+    } catch (err) {
+      console.error('Error building borrower groups:', err);
+      const fallback = new Map<string, BorrowerGroup>();
+      for (const loan of loans) {
+        const key = loan.borrower_email.toLowerCase();
+        if (!fallback.has(key)) {
+          fallback.set(key, {
+            borrowerName: loan.borrower_name,
+            borrowerEmail: loan.borrower_email,
+            isRegistered: false,
+            loans: [],
+            totalBorrowed: 0,
+            totalPaid: 0,
+            remainder: 0,
+            activeLoans: 0,
+            completedLoans: 0,
+          });
+        }
+        const group = fallback.get(key)!;
+        group.loans.push(loan);
+        group.totalBorrowed += Number(loan.amount);
+        group.remainder += Number(loan.amount);
+        if (loan.status === 'active') group.activeLoans++;
+        if (loan.status === 'completed') group.completedLoans++;
+      }
+      setBorrowerGroups(Array.from(fallback.values()));
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges = {
-      active: { bg: 'bg-green-100', text: 'text-green-800', icon: TrendingUp },
-      completed: { bg: 'bg-gray-100', text: 'text-gray-800', icon: CheckCircle },
-      rejected: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle },
-    };
-
-    const badge = badges[status as keyof typeof badges] || badges.active;
-    const Icon = badge.icon;
-
-    return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
-        <Icon className="w-3 h-3 mr-1" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
-
-  const getRegistrationBadge = (isRegistered: boolean) => {
-    if (isRegistered) {
-      return (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800" title="User has registered">
-          <UserCheck className="w-3 h-3 mr-1" />
-          Registered
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="User has not registered yet">
-        <UserX className="w-3 h-3 mr-1" />
-        Not Registered
-      </span>
-    );
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
   if (loans.length === 0) {
     return (
@@ -143,153 +135,80 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
 
   return (
     <>
-      {/* Mobile Card View */}
-      <div className="block lg:hidden space-y-4">
-        {loansWithPayments.map((loan) => (
-          <div key={loan.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            {isAdmin && (
-              <div className="mb-3 pb-3 border-b border-gray-200">
-                <div className="text-sm font-medium text-gray-900">{loan.borrower_name}</div>
-                <div className="text-xs text-gray-500 mb-2">{loan.borrower_email}</div>
-                {getRegistrationBadge(loan.isRegistered || false)}
+      <div className="space-y-3">
+        {borrowerGroups.map(group => (
+          <div
+            key={group.borrowerEmail}
+            onClick={() => setSelectedBorrower(group)}
+            className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer transition-all group"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                {group.borrowerName.charAt(0).toUpperCase()}
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Original Amount</p>
-                <p className="text-sm font-semibold text-gray-900">{formatCurrency(Number(loan.amount))}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Amount Paid</p>
-                <p className="text-sm font-semibold text-green-600">{formatCurrency(loan.totalPaid)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Remainder</p>
-                <p className="text-sm font-semibold text-blue-600">{formatCurrency(loan.remainder)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Interest Rate</p>
-                <p className="text-sm font-medium text-gray-900">{loan.interest_rate}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Frequency</p>
-                <p className="text-sm font-medium text-gray-900 capitalize">{loan.frequency}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Created</p>
-                <p className="text-sm font-medium text-gray-900">{formatDate(loan.created_at)}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-900">{group.borrowerName}</span>
+                  {isAdmin && (
+                    group.isRegistered ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        <UserCheck className="w-3 h-3 mr-0.5" />
+                        Registered
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                        <UserX className="w-3 h-3 mr-0.5" />
+                        Not Registered
+                      </span>
+                    )
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 truncate">{group.borrowerEmail}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {group.activeLoans > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">
+                      <TrendingUp className="w-3 h-3" />
+                      {group.activeLoans} active
+                    </span>
+                  )}
+                  {group.completedLoans > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                      <CheckCircle className="w-3 h-3" />
+                      {group.completedLoans} completed
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
-              <div>{getStatusBadge(loan.status)}</div>
-              {isAdmin && (
-                <button
-                  onClick={() => setSelectedLoan(loan)}
-                  className="flex items-center text-blue-600 hover:text-blue-800 transition font-medium text-sm"
-                >
-                  <Settings className="w-4 h-4 mr-1" />
-                  Manage
-                </button>
-              )}
+
+            <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0 ml-3">
+              <div className="hidden sm:block text-right">
+                <p className="text-xs text-gray-400">Borrowed</p>
+                <p className="text-sm font-semibold text-gray-900">{formatCurrency(group.totalBorrowed)}</p>
+              </div>
+              <div className="hidden sm:block text-right">
+                <p className="text-xs text-gray-400">Paid</p>
+                <p className="text-sm font-semibold text-green-600">{formatCurrency(group.totalPaid)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Outstanding</p>
+                <p className="text-sm font-semibold text-blue-600">{formatCurrency(group.remainder)}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition flex-shrink-0" />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Desktop Table View */}
-      <div className="hidden lg:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {isAdmin && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Borrower
-                </th>
-              )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Original Amount
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount Paid
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Remainder
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Interest Rate
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Frequency
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
-              {isAdmin && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loansWithPayments.map((loan) => (
-              <tr key={loan.id} className="hover:bg-gray-50 transition">
-                {isAdmin && (
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{loan.borrower_name}</div>
-                      <div className="text-sm text-gray-500 mb-2">{loan.borrower_email}</div>
-                      {getRegistrationBadge(loan.isRegistered || false)}
-                    </div>
-                  </td>
-                )}
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {formatCurrency(Number(loan.amount))}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
-                  {formatCurrency(loan.totalPaid)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
-                  {formatCurrency(loan.remainder)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {loan.interest_rate}%
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                  {loan.frequency}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getStatusBadge(loan.status)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(loan.created_at)}
-                </td>
-                {isAdmin && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <button
-                      onClick={() => setSelectedLoan(loan)}
-                      className="flex items-center text-blue-600 hover:text-blue-800 transition font-medium"
-                    >
-                      <Settings className="w-4 h-4 mr-1" />
-                      Manage
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {selectedLoan && (
-        <LoanDetailsModal
-          loan={selectedLoan}
-          onClose={() => setSelectedLoan(null)}
+      {selectedBorrower && (
+        <BorrowerAccountModal
+          borrowerName={selectedBorrower.borrowerName}
+          borrowerEmail={selectedBorrower.borrowerEmail}
+          isRegistered={selectedBorrower.isRegistered}
+          loans={selectedBorrower.loans}
+          onClose={() => setSelectedBorrower(null)}
           onUpdate={() => {
-            fetchRepayments();
+            setSelectedBorrower(null);
             onUpdate();
           }}
         />
