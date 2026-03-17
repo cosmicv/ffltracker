@@ -137,9 +137,9 @@ export const EmailLogs = () => {
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                     {formatDate(log.sent_at)}
                   </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
+                  <td className="px-4 py-3 hidden lg:table-cell max-w-[280px]">
                     {log.error_message ? (
-                      <span className="text-xs text-red-600 max-w-[200px] truncate block" title={log.error_message}>
+                      <span className="text-xs text-red-600 break-words whitespace-normal block">
                         {log.error_message}
                       </span>
                     ) : (
