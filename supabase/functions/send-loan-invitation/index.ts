@@ -33,6 +33,29 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { borrowerEmail, borrowerName, amount, lenderName, loanId }: LoanInvitation = await req.json();
 
+    // Upsert borrower profile using service role (bypasses RLS)
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id, registered")
+      .eq("email", borrowerEmail)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: crypto.randomUUID(),
+          email: borrowerEmail,
+          full_name: borrowerName,
+          role: "borrower",
+          registered: false,
+        });
+
+      if (profileError) {
+        console.error("Failed to create borrower profile:", profileError.message);
+      }
+    }
+
     const subject = "New Loan Invitation";
     const dashboardUrl = `${appUrl}/login`;
 

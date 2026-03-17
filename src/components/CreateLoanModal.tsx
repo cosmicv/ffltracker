@@ -29,33 +29,11 @@ export const CreateLoanModal = ({ onClose, onSuccess }: CreateLoanModalProps) =>
 
     try {
       // Look up borrower by email to get their user ID
-      let { data: borrowerProfile } = await supabase
+      const { data: borrowerProfile } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', formData.borrowerEmail)
         .maybeSingle();
-
-      // If borrower doesn't have a profile yet, create a pending one
-      if (!borrowerProfile) {
-        const newProfileId = crypto.randomUUID();
-        const { data: inserted, error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: newProfileId,
-            email: formData.borrowerEmail,
-            full_name: formData.borrowerName,
-            role: 'borrower',
-            registered: false,
-          })
-          .select('id')
-          .single();
-
-        if (profileError) {
-          console.warn('Could not create borrower profile:', profileError.message);
-        } else {
-          borrowerProfile = inserted;
-        }
-      }
 
       const { error: loanError } = await supabase.from('loans').insert({
         lender_id: user?.id,
