@@ -70,10 +70,16 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Cannot delete yourself" }, 400);
     }
 
+    const { data: userProfile } = await adminClient
+      .from("profiles")
+      .select("email")
+      .eq("id", userId)
+      .maybeSingle();
+
     const { data: userLoans } = await adminClient
       .from("loans")
       .select("id")
-      .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
+      .or(`borrower_id.eq.${userId},lender_id.eq.${userId}${userProfile?.email ? `,borrower_email.eq.${userProfile.email}` : ""}`);
 
     if (userLoans && userLoans.length > 0) {
       const loanIds = userLoans.map((l: { id: string }) => l.id);
@@ -86,10 +92,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const loanDeleteFilter = `borrower_id.eq.${userId},lender_id.eq.${userId}${userProfile?.email ? `,borrower_email.eq.${userProfile.email}` : ""}`;
     const { error: loanErr } = await adminClient
       .from("loans")
       .delete()
-      .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`);
+      .or(loanDeleteFilter);
     if (loanErr) {
       return jsonResponse({ error: `Delete loans failed: ${loanErr.message}` }, 500);
     }

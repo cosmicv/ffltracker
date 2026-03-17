@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Family & Friends Loan Tracker <onboarding@resend.dev>",
+        from: "Family & Friends Loan Tracker <noreply@ffltracker.app>",
         to: [borrowerEmail],
         subject,
         html: emailHtml,
