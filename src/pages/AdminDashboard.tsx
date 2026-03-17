@@ -4,13 +4,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, CreditCard, AlertTriangle, Calendar, Check } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, CreditCard, AlertTriangle, Calendar, Check, Mail } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
 import { UserManagement } from '../components/UserManagement';
+import { EmailLogs } from '../components/EmailLogs';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
+type TabType = 'loans' | 'users' | 'email_logs';
 
 export const AdminDashboard = () => {
   const { profile, signOut } = useAuth();
@@ -20,7 +22,7 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'loans' | 'users'>('loans');
+  const [activeTab, setActiveTab] = useState<TabType>('loans');
   const isMasterAdmin = profile?.role === 'master_admin';
   const requiresSubscription = !isMasterAdmin && !isActive;
   const [stats, setStats] = useState({
@@ -41,10 +43,7 @@ export const AdminDashboard = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching loans:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       setLoans(data || []);
       calculateStats(data || []);
@@ -88,13 +87,15 @@ export const AdminDashboard = () => {
                   {isMasterAdmin ? 'Master Admin' : 'Admin'}
                 </span>
               </span>
-              <button
-                onClick={() => navigate('/subscription')}
-                className="flex items-center text-gray-600 hover:text-gray-900 transition"
-                title="Subscription"
-              >
-                <CreditCard className="w-5 h-5" />
-              </button>
+              {!isMasterAdmin && (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="flex items-center text-gray-600 hover:text-gray-900 transition"
+                  title="Subscription"
+                >
+                  <CreditCard className="w-5 h-5" />
+                </button>
+              )}
               <button
                 onClick={signOut}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition"
@@ -135,9 +136,9 @@ export const AdminDashboard = () => {
               <div className="p-6 space-y-3">
                 {[
                   'Create and manage unlimited loans',
-                  'Track repayment schedules',
-                  'Automatic payment reminders via email',
-                  'Invite borrowers to view their loans',
+                  'Track repayment schedules and payment history',
+                  'Automatic payment reminder emails sent to borrowers',
+                  'Invitation email sent when a new loan is created',
                   'Full dashboard with loan analytics',
                 ].map((feature) => (
                   <div key={feature} className="flex items-center gap-3">
@@ -223,13 +224,11 @@ export const AdminDashboard = () => {
             </div>
 
             {isMasterAdmin && (
-              <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+              <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
                 <button
                   onClick={() => setActiveTab('loans')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    activeTab === 'loans'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                    activeTab === 'loans' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   <DollarSign className="w-4 h-4" />
@@ -238,18 +237,25 @@ export const AdminDashboard = () => {
                 <button
                   onClick={() => setActiveTab('users')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    activeTab === 'users'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                    activeTab === 'users' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   <Shield className="w-4 h-4" />
                   User Management
                 </button>
+                <button
+                  onClick={() => setActiveTab('email_logs')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'email_logs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Mail className="w-4 h-4" />
+                  Email Logs
+                </button>
               </div>
             )}
 
-            {activeTab === 'loans' ? (
+            {activeTab === 'loans' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-6 gap-2">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900">All Borrowers</h3>
@@ -271,13 +277,25 @@ export const AdminDashboard = () => {
                   <LoansList loans={loans} onUpdate={fetchLoans} isAdmin={true} />
                 )}
               </div>
-            ) : (
+            )}
+
+            {activeTab === 'users' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <Shield className="w-6 h-6 text-amber-600" />
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900">User Management</h3>
                 </div>
                 <UserManagement />
+              </div>
+            )}
+
+            {activeTab === 'email_logs' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Mail className="w-6 h-6 text-blue-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Email Logs</h3>
+                </div>
+                <EmailLogs />
               </div>
             )}
 
