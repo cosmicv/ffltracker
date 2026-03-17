@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserRole } from '../types/database';
-import { Trash2, Users, Search, AlertTriangle, X, Shield, User, CheckCircle } from 'lucide-react';
+import { Trash2, Users, Search, AlertTriangle, X, Shield, User, CheckCircle, Mail, Loader2 } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -21,6 +21,7 @@ export const UserManagement = () => {
   const [deletedName, setDeletedName] = useState('');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [resendingInvite, setResendingInvite] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -47,6 +48,47 @@ export const UserManagement = () => {
       setError('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendInvite = async (u: Profile) => {
+    setResendingInvite(u.id);
+    setError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const { data: lenderProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            borrowerEmail: u.email,
+            borrowerName: u.full_name || u.email,
+            lenderName: lenderProfile?.full_name || 'Your lender',
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send invite');
+      }
+      setSuccessMsg(`Invite sent to ${u.email}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send invite');
+    } finally {
+      setResendingInvite(null);
     }
   };
 
@@ -196,13 +238,30 @@ export const UserManagement = () => {
                   </td>
                   <td className="py-3 px-4 text-right">
                     {u.role !== 'master_admin' ? (
-                      <button
-                        onClick={() => setDeleteTarget(u)}
-                        className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Delete</span>
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          onClick={() => handleResendInvite(u)}
+                          disabled={resendingInvite === u.id}
+                          title="Resend invite email"
+                          className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {resendingInvite === u.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Mail className="w-4 h-4" />
+                          )}
+                          <span className="hidden sm:inline">
+                            {resendingInvite === u.id ? 'Sending...' : 'Resend Invite'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(u)}
+                          className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-400 italic">Protected</span>
                     )}
