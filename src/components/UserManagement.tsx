@@ -37,13 +37,35 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [{ data: profileData, error: profileError }, { data: loanData, error: loanError }] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('loans').select('borrower_email, borrower_name, created_at').order('created_at', { ascending: false }),
+      ]);
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (profileError) throw profileError;
+      if (loanError) throw loanError;
+
+      const profiles: Profile[] = profileData || [];
+      const profileEmails = new Set(profiles.map(p => p.email.toLowerCase()));
+
+      const seen = new Set<string>();
+      const loanOnlyUsers: Profile[] = [];
+      for (const loan of loanData || []) {
+        const emailKey = loan.borrower_email.toLowerCase();
+        if (!profileEmails.has(emailKey) && !seen.has(emailKey)) {
+          seen.add(emailKey);
+          loanOnlyUsers.push({
+            id: emailKey,
+            email: loan.borrower_email,
+            full_name: loan.borrower_name,
+            role: 'borrower' as UserRole,
+            created_at: loan.created_at,
+            registered: false,
+          });
+        }
+      }
+
+      setUsers([...loanOnlyUsers, ...profiles]);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to load users');
@@ -270,13 +292,15 @@ export const UserManagement = () => {
                             {resendingInvite === u.id ? 'Sending...' : 'Resend Invite'}
                           </span>
                         </button>
-                        <button
-                          onClick={() => setDeleteTarget(u)}
-                          className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
+                        {u.id.includes('@') ? null : (
+                          <button
+                            onClick={() => setDeleteTarget(u)}
+                            className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <span className="text-xs text-gray-400 italic">Protected</span>
