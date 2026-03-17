@@ -28,16 +28,20 @@ export const CreateLoanModal = ({ onClose, onSuccess }: CreateLoanModalProps) =>
     setLoading(true);
 
     try {
-      // Look up borrower by email to get their user ID
-      const { data: borrowerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', formData.borrowerEmail)
-        .maybeSingle();
+      // Upsert borrower profile and get their ID
+      const { data: borrowerProfileId, error: profileFnError } = await supabase
+        .rpc('upsert_borrower_profile', {
+          p_email: formData.borrowerEmail,
+          p_full_name: formData.borrowerName,
+        });
+
+      if (profileFnError) {
+        console.warn('Could not upsert borrower profile:', profileFnError.message);
+      }
 
       const { error: loanError } = await supabase.from('loans').insert({
         lender_id: user?.id,
-        borrower_id: borrowerProfile?.id || null,
+        borrower_id: borrowerProfileId || null,
         borrower_name: formData.borrowerName,
         borrower_email: formData.borrowerEmail,
         amount: parseFloat(formData.amount),
