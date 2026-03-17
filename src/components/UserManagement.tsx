@@ -9,6 +9,7 @@ interface Profile {
   full_name: string;
   role: UserRole;
   created_at: string;
+  registered: boolean;
 }
 
 export const UserManagement = () => {
@@ -158,6 +159,15 @@ export const UserManagement = () => {
     );
   };
 
+  const getStatusBadge = (registered: boolean) => {
+    if (registered) return null;
+    return (
+      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+        Pending
+      </span>
+    );
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -224,12 +234,18 @@ export const UserManagement = () => {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{u.full_name}</p>
                         <p className="text-xs text-gray-500 truncate">{u.email}</p>
-                        <div className="sm:hidden mt-1">{getRoleBadge(u.role)}</div>
+                        <div className="sm:hidden mt-1 flex items-center gap-1.5 flex-wrap">
+                          {getRoleBadge(u.role)}
+                          {getStatusBadge(u.registered)}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4 hidden sm:table-cell">
-                    {getRoleBadge(u.role)}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {getRoleBadge(u.role)}
+                      {getStatusBadge(u.registered)}
+                    </div>
                   </td>
                   <td className="py-3 px-4 hidden md:table-cell">
                     <span className="text-sm text-gray-500">
