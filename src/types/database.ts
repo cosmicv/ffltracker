@@ -153,7 +153,6 @@ export interface Database {
         };
         Relationships: [];
       };
-    };
       email_logs: {
         Row: {
           id: string;

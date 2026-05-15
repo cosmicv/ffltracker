@@ -51,7 +51,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
         onSuccess?.();
       }
-    } catch (_err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
