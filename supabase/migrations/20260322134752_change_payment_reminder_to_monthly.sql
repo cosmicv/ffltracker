@@ -21,8 +21,8 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://bfjmakwhbrnxsevqqtuo.supabase.co/functions/v1/send-payment-reminders',
-      headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmam1ha3doYnJueHNldnFxdHVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNTQyNDgsImV4cCI6MjA4MzkzMDI0OH0.o5CkPJBVwt4hO1tqG2A1J6eD3bjuFWAx0H0j_xGrt1A"}'::jsonb,
+      url := 'https://favjgknkznswawrqwugb.supabase.co/functions/v1/send-payment-reminders',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || current_setting('app.settings.supabase_anon_key')),
       body := '{}'::jsonb
     ) as request_id;
   $$

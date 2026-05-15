@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { SignupForm } from '../components/auth/SignupForm';
 import { useAuth } from '../hooks/useAuth';
