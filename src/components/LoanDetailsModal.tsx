@@ -33,7 +33,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         .order('due_date', { ascending: false });
 
       if (error) throw error;
-      setRepayments(data || []);
+      setRepayments((data as Repayment[]) ?? []);
     } catch (error) {
       console.error('Error fetching repayments:', error);
     } finally {
@@ -80,7 +80,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
           const { data: lenderProfile } = await supabase
             .from('profiles')
             .select('full_name')
-            .eq('id', loan.lender_id)
+            .eq('id', loan.lender_id ?? '')
             .maybeSingle();
 
           const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
@@ -139,7 +139,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         .select('*')
         .eq('loan_id', loan.id);
 
-      const totalPaid = (updatedRepayments || [])
+      const totalPaid = ((updatedRepayments as Repayment[]) ?? [])
         .filter(r => r.paid)
         .reduce((sum, r) => sum + Number(r.amount), 0);
 
