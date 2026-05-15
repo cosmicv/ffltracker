@@ -36,7 +36,7 @@ export function useSubscription() {
           console.error('Error fetching subscription:', error);
           setSubscription(null);
         } else {
-          setSubscription(data);
+          setSubscription(data as Subscription | null);
         }
       } catch (err) {
         console.error('Unexpected error fetching subscription:', err);
