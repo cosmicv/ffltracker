@@ -37,20 +37,18 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
     setLoading(true);
     try {
       const loanIds = loans.map(l => l.id);
-      type Repayment = Database['public']['Tables']['repayments']['Row'];
-      const { data: repaymentData, error } = await supabase
+      const { data: repayments, error } = await supabase
         .from('repayments')
         .select('*')
         .in('loan_id', loanIds);
 
       if (error) throw error;
 
-      const repayments = (repaymentData as Repayment[]) ?? [];
       const grouped = new Map<string, BorrowerGroup>();
 
       for (const loan of loans) {
         const key = loan.borrower_email.toLowerCase();
-        const loanRepayments = repayments.filter(r => r.loan_id === loan.id && r.paid);
+        const loanRepayments = (repayments || []).filter(r => r.loan_id === loan.id && r.paid);
         const paidForLoan = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
         const remainderForLoan = Number(loan.amount) - paidForLoan;
 
@@ -60,7 +58,7 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
             const { data } = await supabase.rpc('check_borrower_registered', {
               borrower_email_param: loan.borrower_email,
             });
-            isRegistered = (data as boolean) === true;
+            isRegistered = data?.[0]?.is_registered || false;
           }
           grouped.set(key, {
             borrowerName: loan.borrower_name,

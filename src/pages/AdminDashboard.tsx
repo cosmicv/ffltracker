@@ -45,8 +45,8 @@ export const AdminDashboard = () => {
 
       if (error) throw error;
 
-      setLoans((data as Loan[]) ?? []);
-      calculateStats((data as Loan[]) ?? []);
+      setLoans(data || []);
+      calculateStats(data || []);
     } catch (error) {
       console.error('Error fetching loans:', error);
     } finally {

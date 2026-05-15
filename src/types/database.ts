@@ -21,7 +21,6 @@ export interface Database {
           email: string;
           full_name: string;
           role: UserRole;
-          registered: boolean;
           created_at: string;
         };
         Insert: {
@@ -29,7 +28,6 @@ export interface Database {
           email: string;
           full_name: string;
           role?: UserRole;
-          registered?: boolean;
           created_at?: string;
         };
         Update: {
@@ -37,10 +35,8 @@ export interface Database {
           email?: string;
           full_name?: string;
           role?: UserRole;
-          registered?: boolean;
           created_at?: string;
         };
-        Relationships: [];
       };
       loans: {
         Row: {
@@ -88,7 +84,6 @@ export interface Database {
           start_date?: string | null;
           notes?: string;
         };
-        Relationships: [];
       };
       repayments: {
         Row: {
@@ -118,7 +113,6 @@ export interface Database {
           paid_at?: string | null;
           created_at?: string;
         };
-        Relationships: [];
       };
       feedback: {
         Row: {
@@ -151,76 +145,7 @@ export interface Database {
           status?: FeedbackStatus;
           created_at?: string;
         };
-        Relationships: [];
-      };
-      email_logs: {
-        Row: {
-          id: string;
-          email_type: string;
-          recipient_email: string;
-          recipient_name: string;
-          loan_id: string | null;
-          subject: string;
-          status: string;
-          provider_message_id: string | null;
-          error_message: string | null;
-          sent_at: string;
-        };
-        Insert: {
-          id?: string;
-          email_type: string;
-          recipient_email: string;
-          recipient_name?: string;
-          loan_id?: string | null;
-          subject?: string;
-          status?: string;
-          provider_message_id?: string | null;
-          error_message?: string | null;
-          sent_at?: string;
-        };
-        Update: {
-          id?: string;
-          email_type?: string;
-          recipient_email?: string;
-          recipient_name?: string;
-          loan_id?: string | null;
-          subject?: string;
-          status?: string;
-          provider_message_id?: string | null;
-          error_message?: string | null;
-          sent_at?: string;
-        };
-        Relationships: [];
       };
     };
-    Views: {
-      stripe_user_subscriptions: {
-        Row: {
-          user_id: string | null;
-          subscription_id: string | null;
-          price_id: string | null;
-          current_period_start: number | null;
-          current_period_end: number | null;
-          cancel_at_period_end: boolean | null;
-          payment_method_brand: string | null;
-          payment_method_last4: string | null;
-          status: string | null;
-          subscription_status: string | null;
-        };
-        Relationships: [];
-      };
-    };
-    Functions: {
-      check_borrower_registered: {
-        Args: { borrower_email_param: string };
-        Returns: boolean;
-      };
-      upsert_borrower_profile: {
-        Args: { p_email: string; p_full_name: string };
-        Returns: string;
-      };
-    };
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
   };
 }

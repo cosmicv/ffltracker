@@ -45,7 +45,7 @@ export const UserManagement = () => {
       if (profileError) throw profileError;
       if (loanError) throw loanError;
 
-      const profiles: Profile[] = (profileData as Profile[]) ?? [];
+      const profiles: Profile[] = profileData || [];
       const profileEmails = new Set(profiles.map(p => p.email.toLowerCase()));
 
       const seen = new Set<string>();

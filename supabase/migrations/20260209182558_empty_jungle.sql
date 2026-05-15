@@ -33,12 +33,6 @@
     - Implements policies for authenticated users to view their own data
 */
 
--- Clean up objects created in initial_schema that lack the correct structure.
--- Safe on a fresh install; no data exists at this point.
-DROP VIEW IF EXISTS stripe_user_subscriptions;
-DROP TABLE IF EXISTS stripe_subscriptions;
-DROP TABLE IF EXISTS stripe_customers;
-
 CREATE TABLE IF NOT EXISTS stripe_customers (
   id bigint primary key generated always as identity,
   user_id uuid references auth.users(id) not null unique,

@@ -31,8 +31,8 @@ export const BorrowerDashboard = () => {
         throw error;
       }
 
-      setLoans((data as Loan[]) ?? []);
-      setActiveLoans((data as Loan[]) ?? []);
+      setLoans(data || []);
+      setActiveLoans(data || []);
     } catch (error) {
       console.error('Error fetching loans:', error);
     } finally {

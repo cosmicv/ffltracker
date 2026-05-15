@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
 
       if (error) throw error;
-      setProfile(data as Profile | null);
+      setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {

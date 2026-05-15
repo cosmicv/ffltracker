@@ -115,7 +115,7 @@ export const BorrowerAccountModal = ({
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', user?.id ?? '')
+          .eq('id', user?.id)
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-invitation`;
