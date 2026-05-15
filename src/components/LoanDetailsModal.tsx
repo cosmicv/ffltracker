@@ -179,7 +179,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', loan.lender_id)
+          .eq('id', loan.lender_id ?? '')
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
@@ -244,7 +244,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', loan.lender_id)
+          .eq('id', loan.lender_id ?? '')
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;

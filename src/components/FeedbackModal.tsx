@@ -30,7 +30,7 @@ export const FeedbackModal = ({ onClose }: FeedbackModalProps) => {
       const { error: dbError } = await supabase
         .from('feedback')
         .insert({
-          user_id: user?.id,
+          user_id: user?.id ?? '',
           user_email: user?.email || '',
           user_name: profile?.full_name || 'Unknown',
           message: message.trim(),

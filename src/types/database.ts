@@ -215,6 +215,10 @@ export interface Database {
         Args: { borrower_email_param: string };
         Returns: boolean;
       };
+      upsert_borrower_profile: {
+        Args: { p_email: string; p_full_name: string };
+        Returns: string;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
