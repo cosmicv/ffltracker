@@ -1,11 +1,10 @@
-import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Building2, LogOut, User, CreditCard } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSubscription } from '../hooks/useSubscription';
 
 interface HeaderProps {
-  user: any;
+  user: { email?: string } | null;
 }
 
 export function Header({ user }: HeaderProps) {

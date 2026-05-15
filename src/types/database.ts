@@ -154,6 +154,46 @@ export interface Database {
         Relationships: [];
       };
     };
+      email_logs: {
+        Row: {
+          id: string;
+          email_type: string;
+          recipient_email: string;
+          recipient_name: string;
+          loan_id: string | null;
+          subject: string;
+          status: string;
+          provider_message_id: string | null;
+          error_message: string | null;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          email_type: string;
+          recipient_email: string;
+          recipient_name?: string;
+          loan_id?: string | null;
+          subject?: string;
+          status?: string;
+          provider_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string;
+        };
+        Update: {
+          id?: string;
+          email_type?: string;
+          recipient_email?: string;
+          recipient_name?: string;
+          loan_id?: string | null;
+          subject?: string;
+          status?: string;
+          provider_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       stripe_user_subscriptions: {
         Row: {
