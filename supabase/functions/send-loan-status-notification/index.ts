@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { jsonResponse, requireAdmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +24,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const auth = await requireAdmin(req);
+    if ("error" in auth) {
+      return jsonResponse({ success: false, error: auth.error }, auth.status, corsHeaders);
+    }
+
     const { borrowerEmail, borrowerName, amount, lenderName, status }: LoanStatusNotification = await req.json();
+
+    if (!borrowerEmail || !borrowerName || !amount || !["completed", "deleted"].includes(status)) {
+      return jsonResponse(
+        { success: false, error: "borrowerEmail, borrowerName, amount, and a valid status are required" },
+        400,
+        corsHeaders,
+      );
+    }
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     

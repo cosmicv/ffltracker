@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { jsonResponse, requireAdmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,14 +30,28 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing Supabase configuration");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const auth = await requireAdmin(req);
+    if ("error" in auth) {
+      return jsonResponse({ success: false, error: auth.error }, auth.status, corsHeaders);
+    }
+
+    const supabase = auth.adminClient;
     const { borrowerEmail, borrowerName, amount, lenderName, loanId }: LoanInvitation = await req.json();
+
+    if (!borrowerEmail || !borrowerName || !amount) {
+      return jsonResponse(
+        { success: false, error: "borrowerEmail, borrowerName, and amount are required" },
+        400,
+        corsHeaders,
+      );
+    }
 
     // Upsert borrower profile using service role (bypasses RLS)
     const { data: existingProfile } = await supabase
       .from("profiles")
       .select("id, registered")
-      .eq("email", borrowerEmail)
+      .ilike("email", borrowerEmail)
+      .limit(1)
       .maybeSingle();
 
     if (!existingProfile) {
@@ -45,7 +59,7 @@ Deno.serve(async (req: Request) => {
         .from("profiles")
         .insert({
           id: crypto.randomUUID(),
-          email: borrowerEmail,
+          email: borrowerEmail.toLowerCase(),
           full_name: borrowerName,
           role: "borrower",
           registered: false,

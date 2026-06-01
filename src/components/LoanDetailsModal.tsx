@@ -24,6 +24,16 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
     fetchRepayments();
   }, [loan.id]);
 
+  const getFunctionHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    return {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    };
+  };
+
   const fetchRepayments = async () => {
     try {
       const { data, error } = await supabase
@@ -80,17 +90,14 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
           const { data: lenderProfile } = await supabase
             .from('profiles')
             .select('full_name')
-            .eq('id', loan.lender_id)
+            .eq('id', loan.lender_id ?? '')
             .maybeSingle();
 
           const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
 
           const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-            },
+            headers: await getFunctionHeaders(),
             body: JSON.stringify({
               borrowerEmail: loan.borrower_email,
               borrowerName: loan.borrower_name,
@@ -179,17 +186,14 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', loan.lender_id)
+          .eq('id', loan.lender_id ?? '')
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
 
         const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
+          headers: await getFunctionHeaders(),
           body: JSON.stringify({
             borrowerEmail: loan.borrower_email,
             borrowerName: loan.borrower_name,
@@ -244,17 +248,14 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', loan.lender_id)
+          .eq('id', loan.lender_id ?? '')
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
 
         const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
+          headers: await getFunctionHeaders(),
           body: JSON.stringify({
             borrowerEmail: loan.borrower_email,
             borrowerName: loan.borrower_name,

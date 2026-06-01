@@ -115,14 +115,17 @@ export const BorrowerAccountModal = ({
         const { data: lenderProfile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', user?.id)
+          .eq('id', user?.id ?? '')
           .maybeSingle();
 
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-invitation`;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Not authenticated');
+
         await fetch(apiUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

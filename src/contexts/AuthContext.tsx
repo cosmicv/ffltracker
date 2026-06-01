@@ -99,12 +99,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!data.user) return { error: new Error('User creation failed') };
 
       const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          role: 'borrower',
+        .rpc('claim_registered_profile', {
+          p_full_name: fullName,
         });
 
       if (profileError) return { error: profileError };

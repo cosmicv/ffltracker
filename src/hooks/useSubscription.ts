@@ -36,7 +36,15 @@ export function useSubscription() {
           console.error('Error fetching subscription:', error);
           setSubscription(null);
         } else {
-          setSubscription(data);
+          setSubscription(data && data.subscription_status ? {
+            subscription_status: data.subscription_status,
+            price_id: data.price_id,
+            current_period_start: data.current_period_start,
+            current_period_end: data.current_period_end,
+            cancel_at_period_end: data.cancel_at_period_end ?? false,
+            payment_method_brand: data.payment_method_brand,
+            payment_method_last4: data.payment_method_last4,
+          } : null);
         }
       } catch (err) {
         console.error('Unexpected error fetching subscription:', err);

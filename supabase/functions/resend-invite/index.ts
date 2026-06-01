@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { jsonResponse, requireAdmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +22,12 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing Supabase configuration");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const auth = await requireAdmin(req);
+    if ("error" in auth) {
+      return jsonResponse({ success: false, error: auth.error }, auth.status, corsHeaders);
+    }
+
+    const supabase = auth.adminClient;
 
     const { borrowerEmail, borrowerName, lenderName } = await req.json();
 

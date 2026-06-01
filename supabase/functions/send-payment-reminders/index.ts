@@ -44,14 +44,6 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (!resendApiKey) {
-      console.warn("RESEND_API_KEY not configured. Email statements skipped.");
-      return new Response(
-        JSON.stringify({ success: true, message: "Email service not configured" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const today = new Date().toISOString().split("T")[0];
     const dashboardUrl = `${appUrl}/login`;
 
@@ -72,6 +64,32 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (!resendApiKey) {
+      console.warn("RESEND_API_KEY not configured. Email statements skipped.");
+      for (const loan of loans as Loan[]) {
+        await supabase.from("email_logs").insert({
+          email_type: "payment_reminder",
+          recipient_email: loan.borrower_email,
+          recipient_name: loan.borrower_name,
+          loan_id: loan.id,
+          subject: `Monthly Loan Statement - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`,
+          status: "failed",
+          error_message: "RESEND_API_KEY not configured",
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Email service not configured",
+          totalLoans: loans.length,
+          emailsSent: 0,
+          emailsFailed: loans.length,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const emailsSent: string[] = [];
     const emailsFailed: string[] = [];
 
@@ -85,15 +103,17 @@ Deno.serve(async (req: Request) => {
         .sort((a, b) => a.due_date.localeCompare(b.due_date));
 
       const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-      const totalRemaining = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+      const totalRemaining = Math.max(Number(loan.amount) - totalPaid, 0);
       const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
       const nextPayment = upcomingRepayments[0] ?? null;
 
       const hasOverdue = overdueRepayments.length > 0;
       const subject = `Monthly Loan Statement - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`;
 
-      const formatDate = (d: string) =>
-        new Date(d + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const formatDate = (d: string | null) =>
+        d
+          ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+          : "Not set";
 
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
@@ -139,6 +159,10 @@ Deno.serve(async (req: Request) => {
             <div style="background-color: #eff6ff; padding: 16px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 20px;">
               <h3 style="margin: 0 0 8px; color: #1e40af; font-size: 15px;">Next Payment Due</h3>
               <p style="margin: 0; color: #1e3a8a;"><strong>${formatDate(nextPayment.due_date)}</strong> &mdash; <strong>$${Number(nextPayment.amount).toLocaleString()}</strong></p>
+            </div>
+            ` : totalRemaining > 0 ? `
+            <div style="background-color: #eff6ff; padding: 16px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 20px;">
+              <p style="margin: 0; color: #1e3a8a;">Your account has an outstanding balance of <strong>$${totalRemaining.toLocaleString()}</strong>. No upcoming scheduled payment date is currently set.</p>
             </div>
             ` : `
             <div style="background-color: #f0fdf4; padding: 16px; border-radius: 8px; border-left: 4px solid #16a34a; margin-bottom: 20px;">

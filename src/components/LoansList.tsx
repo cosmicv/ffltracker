@@ -58,7 +58,7 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
             const { data } = await supabase.rpc('check_borrower_registered', {
               borrower_email_param: loan.borrower_email,
             });
-            isRegistered = data?.[0]?.is_registered || false;
+            isRegistered = data === true;
           }
           grouped.set(key, {
             borrowerName: loan.borrower_name,
