@@ -23,8 +23,52 @@ interface Loan {
   interest_rate: number;
   frequency: string;
   status: string;
-  start_date: string;
+  start_date: string | null;
   repayments: Repayment[];
+}
+
+interface BorrowerStatement {
+  borrowerName: string;
+  borrowerEmail: string;
+  loans: Loan[];
+}
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+
+const formatDate = (d: string | null) =>
+  d
+    ? new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "Not set";
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+function summarizeLoan(loan: Loan, today: string) {
+  const repayments = loan.repayments || [];
+  const paidRepayments = repayments.filter((r) => r.paid);
+  const unpaidRepayments = repayments.filter((r) => !r.paid);
+  const overdueRepayments = unpaidRepayments.filter((r) => r.due_date < today);
+  const upcomingRepayments = unpaidRepayments
+    .filter((r) => r.due_date >= today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+  const totalRemaining = Math.max(Number(loan.amount) - totalPaid, 0);
+  const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+
+  return {
+    totalPaid,
+    totalRemaining,
+    totalOverdue,
+    overdueCount: overdueRepayments.length,
+    nextPayment: upcomingRepayments[0] ?? null,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,9 +86,18 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing Supabase configuration");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    let force = false;
+    try {
+      const payload = await req.json();
+      force = payload?.force === true;
+    } catch {
+      // Cron sends a simple JSON body, but tolerate empty/manual requests too.
+    }
 
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const today = new Date().toISOString().split("T")[0];
+    const statementMonth = new Date().toLocaleString("default", { month: "long", year: "numeric" });
+    const subject = `Monthly Loan Statement - ${statementMonth}`;
     const dashboardUrl = `${appUrl}/login`;
 
     const { data: loans, error: loansError } = await supabase
@@ -64,18 +117,39 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const borrowers = new Map<string, BorrowerStatement>();
+    for (const loan of loans as Loan[]) {
+      const emailKey = loan.borrower_email.trim().toLowerCase();
+      if (!emailKey) continue;
+
+      if (!borrowers.has(emailKey)) {
+        borrowers.set(emailKey, {
+          borrowerName: loan.borrower_name,
+          borrowerEmail: emailKey,
+          loans: [],
+        });
+      }
+
+      borrowers.get(emailKey)!.loans.push(loan);
+    }
+
+    const emailsSent: string[] = [];
+    const emailsFailed: string[] = [];
+    const emailsSkipped: string[] = [];
+
     if (!resendApiKey) {
       console.warn("RESEND_API_KEY not configured. Email statements skipped.");
-      for (const loan of loans as Loan[]) {
+      for (const borrower of borrowers.values()) {
         await supabase.from("email_logs").insert({
           email_type: "payment_reminder",
-          recipient_email: loan.borrower_email,
-          recipient_name: loan.borrower_name,
-          loan_id: loan.id,
-          subject: `Monthly Loan Statement - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`,
+          recipient_email: borrower.borrowerEmail,
+          recipient_name: borrower.borrowerName,
+          loan_id: null,
+          subject,
           status: "failed",
           error_message: "RESEND_API_KEY not configured",
         });
+        emailsFailed.push(borrower.borrowerEmail);
       }
 
       return new Response(
@@ -83,90 +157,111 @@ Deno.serve(async (req: Request) => {
           success: false,
           message: "Email service not configured",
           totalLoans: loans.length,
+          totalRecipients: borrowers.size,
           emailsSent: 0,
-          emailsFailed: loans.length,
+          emailsFailed: emailsFailed.length,
+          emailsSkipped: 0,
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const emailsSent: string[] = [];
-    const emailsFailed: string[] = [];
+    for (const borrower of borrowers.values()) {
+      if (!force) {
+        const { data: existingSent } = await supabase
+          .from("email_logs")
+          .select("id")
+          .eq("email_type", "payment_reminder")
+          .eq("recipient_email", borrower.borrowerEmail)
+          .eq("subject", subject)
+          .eq("status", "sent")
+          .limit(1)
+          .maybeSingle();
 
-    for (const loan of loans as Loan[]) {
-      const allRepayments = loan.repayments || [];
-      const paidRepayments = allRepayments.filter((r) => r.paid);
-      const unpaidRepayments = allRepayments.filter((r) => !r.paid);
-      const overdueRepayments = unpaidRepayments.filter((r) => r.due_date < today);
-      const upcomingRepayments = unpaidRepayments
-        .filter((r) => r.due_date >= today)
-        .sort((a, b) => a.due_date.localeCompare(b.due_date));
+        if (existingSent) {
+          emailsSkipped.push(borrower.borrowerEmail);
+          continue;
+        }
+      }
 
-      const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-      const totalRemaining = Math.max(Number(loan.amount) - totalPaid, 0);
-      const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-      const nextPayment = upcomingRepayments[0] ?? null;
+      const loanSummaries = borrower.loans.map((loan) => ({
+        loan,
+        summary: summarizeLoan(loan, today),
+      }));
 
-      const hasOverdue = overdueRepayments.length > 0;
-      const subject = `Monthly Loan Statement - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`;
+      const totalBorrowed = borrower.loans.reduce((sum, loan) => sum + Number(loan.amount), 0);
+      const totalPaid = loanSummaries.reduce((sum, item) => sum + item.summary.totalPaid, 0);
+      const totalRemaining = loanSummaries.reduce((sum, item) => sum + item.summary.totalRemaining, 0);
+      const totalOverdue = loanSummaries.reduce((sum, item) => sum + item.summary.totalOverdue, 0);
+      const overdueCount = loanSummaries.reduce((sum, item) => sum + item.summary.overdueCount, 0);
+      const nextPayment = loanSummaries
+        .map((item) => item.summary.nextPayment)
+        .filter((payment): payment is Repayment => payment !== null)
+        .sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
 
-      const formatDate = (d: string | null) =>
-        d
-          ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-          : "Not set";
+      const loanRows = loanSummaries.map(({ loan, summary }, index) => `
+        <tr>
+          <td style="padding: 10px 0; border-top: ${index === 0 ? "none" : "1px solid #e5e7eb"};">
+            <strong>${formatCurrency(Number(loan.amount))}</strong><br />
+            <span style="color: #6b7280; font-size: 13px;">${escapeHtml(loan.frequency)} at ${Number(loan.interest_rate).toLocaleString()}% interest</span>
+          </td>
+          <td style="padding: 10px 0; border-top: ${index === 0 ? "none" : "1px solid #e5e7eb"}; text-align: right;">
+            ${formatCurrency(summary.totalPaid)} paid<br />
+            <strong>${formatCurrency(summary.totalRemaining)} remaining</strong>
+          </td>
+        </tr>
+      `).join("");
 
       const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
+        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
           <div style="background-color: #1e40af; padding: 24px; border-radius: 8px 8px 0 0;">
             <h2 style="color: white; margin: 0; font-size: 22px;">Monthly Loan Statement</h2>
-            <p style="color: #bfdbfe; margin: 4px 0 0;">${new Date().toLocaleString("default", { month: "long", year: "numeric" })}</p>
+            <p style="color: #bfdbfe; margin: 4px 0 0;">${statementMonth}</p>
           </div>
 
           <div style="background-color: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
-            <p style="margin: 0 0 20px;">Hi ${loan.borrower_name},</p>
-            <p style="margin: 0 0 20px;">Here is your monthly account statement for your loan.</p>
-
-            <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 20px;">
-              <h3 style="margin: 0 0 16px; color: #1f2937; font-size: 16px;">Loan Summary</h3>
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #6b7280;">Original Loan Amount</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">$${Number(loan.amount).toLocaleString()}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280;">Interest Rate</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${loan.interest_rate}%</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280;">Payment Frequency</td><td style="padding: 6px 0; text-align: right; font-weight: bold; text-transform: capitalize;">${loan.frequency}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280;">Loan Start Date</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${formatDate(loan.start_date)}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280;">Status</td><td style="padding: 6px 0; text-align: right;"><span style="background-color: #dcfce7; color: #166534; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; text-transform: capitalize;">${loan.status}</span></td></tr>
-              </table>
-            </div>
+            <p style="margin: 0 0 20px;">Hi ${escapeHtml(borrower.borrowerName)},</p>
+            <p style="margin: 0 0 20px;">Here is your monthly account statement covering ${borrower.loans.length} active loan${borrower.loans.length === 1 ? "" : "s"}.</p>
 
             <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+              <div style="flex: 1; background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+                <p style="margin: 0; color: #6b7280; font-size: 13px;">Total Borrowed</p>
+                <p style="margin: 4px 0 0; color: #111827; font-size: 20px; font-weight: bold;">${formatCurrency(totalBorrowed)}</p>
+              </div>
               <div style="flex: 1; background-color: #dcfce7; padding: 16px; border-radius: 8px; text-align: center;">
                 <p style="margin: 0; color: #166534; font-size: 13px;">Total Paid</p>
-                <p style="margin: 4px 0 0; color: #15803d; font-size: 20px; font-weight: bold;">$${totalPaid.toLocaleString()}</p>
+                <p style="margin: 4px 0 0; color: #15803d; font-size: 20px; font-weight: bold;">${formatCurrency(totalPaid)}</p>
               </div>
               <div style="flex: 1; background-color: #dbeafe; padding: 16px; border-radius: 8px; text-align: center;">
                 <p style="margin: 0; color: #1e40af; font-size: 13px;">Remaining Balance</p>
-                <p style="margin: 4px 0 0; color: #1d4ed8; font-size: 20px; font-weight: bold;">$${totalRemaining.toLocaleString()}</p>
+                <p style="margin: 4px 0 0; color: #1d4ed8; font-size: 20px; font-weight: bold;">${formatCurrency(totalRemaining)}</p>
               </div>
             </div>
 
-            ${hasOverdue ? `
+            <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 20px;">
+              <h3 style="margin: 0 0 12px; color: #1f2937; font-size: 16px;">Loan Summary</h3>
+              <table style="width: 100%; border-collapse: collapse;">${loanRows}</table>
+            </div>
+
+            ${overdueCount > 0 ? `
             <div style="background-color: #fee2e2; padding: 16px; border-radius: 8px; border-left: 4px solid #dc2626; margin-bottom: 20px;">
               <h3 style="margin: 0 0 8px; color: #991b1b; font-size: 15px;">Overdue Payments</h3>
-              <p style="margin: 0; color: #7f1d1d;">You have <strong>${overdueRepayments.length} overdue payment${overdueRepayments.length > 1 ? "s" : ""}</strong> totalling <strong>$${totalOverdue.toLocaleString()}</strong>. Please log in to settle these as soon as possible.</p>
+              <p style="margin: 0; color: #7f1d1d;">You have <strong>${overdueCount} overdue payment${overdueCount === 1 ? "" : "s"}</strong> totalling <strong>${formatCurrency(totalOverdue)}</strong>.</p>
             </div>
             ` : ""}
 
             ${nextPayment ? `
             <div style="background-color: #eff6ff; padding: 16px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 20px;">
               <h3 style="margin: 0 0 8px; color: #1e40af; font-size: 15px;">Next Payment Due</h3>
-              <p style="margin: 0; color: #1e3a8a;"><strong>${formatDate(nextPayment.due_date)}</strong> &mdash; <strong>$${Number(nextPayment.amount).toLocaleString()}</strong></p>
+              <p style="margin: 0; color: #1e3a8a;"><strong>${formatDate(nextPayment.due_date)}</strong> - <strong>${formatCurrency(Number(nextPayment.amount))}</strong></p>
             </div>
             ` : totalRemaining > 0 ? `
             <div style="background-color: #eff6ff; padding: 16px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 20px;">
-              <p style="margin: 0; color: #1e3a8a;">Your account has an outstanding balance of <strong>$${totalRemaining.toLocaleString()}</strong>. No upcoming scheduled payment date is currently set.</p>
+              <p style="margin: 0; color: #1e3a8a;">Your account has an outstanding balance of <strong>${formatCurrency(totalRemaining)}</strong>. No upcoming scheduled payment date is currently set.</p>
             </div>
             ` : `
             <div style="background-color: #f0fdf4; padding: 16px; border-radius: 8px; border-left: 4px solid #16a34a; margin-bottom: 20px;">
-              <p style="margin: 0; color: #166534; font-weight: bold;">All payments are up to date. Great work!</p>
+              <p style="margin: 0; color: #166534; font-weight: bold;">All payments are up to date.</p>
             </div>
             `}
 
@@ -176,7 +271,7 @@ Deno.serve(async (req: Request) => {
           </div>
 
           <div style="background-color: #f3f4f6; padding: 16px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none; text-align: center;">
-            <p style="margin: 0; color: #9ca3af; font-size: 13px;">Family &amp; Friends Loan Tracker &mdash; This is an automated monthly statement.</p>
+            <p style="margin: 0; color: #9ca3af; font-size: 13px;">Family &amp; Friends Loan Tracker - This is an automated monthly statement.</p>
           </div>
         </div>
       `;
@@ -194,7 +289,7 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             from: "Family & Friends Loan Tracker <noreply@ffltracker.app>",
-            to: [loan.borrower_email],
+            to: [borrower.borrowerEmail],
             subject,
             html: emailHtml,
           }),
@@ -204,23 +299,23 @@ Deno.serve(async (req: Request) => {
           const errText = await emailResponse.text();
           logStatus = "failed";
           errorMessage = errText;
-          emailsFailed.push(loan.borrower_email);
+          emailsFailed.push(borrower.borrowerEmail);
         } else {
           const result = await emailResponse.json();
           providerMessageId = result.id || null;
-          emailsSent.push(loan.borrower_email);
+          emailsSent.push(borrower.borrowerEmail);
         }
       } catch (sendErr) {
         logStatus = "failed";
         errorMessage = sendErr instanceof Error ? sendErr.message : String(sendErr);
-        emailsFailed.push(loan.borrower_email);
+        emailsFailed.push(borrower.borrowerEmail);
       }
 
       await supabase.from("email_logs").insert({
         email_type: "payment_reminder",
-        recipient_email: loan.borrower_email,
-        recipient_name: loan.borrower_name,
-        loan_id: loan.id,
+        recipient_email: borrower.borrowerEmail,
+        recipient_name: borrower.borrowerName,
+        loan_id: null,
         subject,
         status: logStatus,
         provider_message_id: providerMessageId,
@@ -234,8 +329,11 @@ Deno.serve(async (req: Request) => {
         message: "Monthly statements processed",
         emailsSent: emailsSent.length,
         emailsFailed: emailsFailed.length,
+        emailsSkipped: emailsSkipped.length,
         totalLoans: loans.length,
+        totalRecipients: borrowers.size,
         recipients: emailsSent,
+        skippedRecipients: emailsSkipped,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
