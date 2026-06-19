@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   clearSession,
+  clearOtherSessions,
   consumeResetToken,
   createResetToken,
   hashPassword,
@@ -196,6 +197,32 @@ app.post('/api/auth/reset-password', authLimiter, asyncRoute(async (req, res) =>
   await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
     .run(await hashPassword(password), now(), userId);
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  res.json({ success: true });
+}));
+
+app.post('/api/auth/change-password', authLimiter, requireAuth, asyncRoute(async (req, res) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: 'New password must be at least 8 characters' });
+    return;
+  }
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: 'New password must be different from your current password' });
+    return;
+  }
+
+  const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.authUser!.id) as
+    | { password_hash: string | null }
+    | undefined;
+  if (!user?.password_hash || !(await verifyPassword(user.password_hash, currentPassword))) {
+    res.status(400).json({ error: 'Current password is incorrect' });
+    return;
+  }
+
+  await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
+    .run(await hashPassword(newPassword), now(), req.authUser!.id);
+  await clearOtherSessions(req, req.authUser!.id);
   res.json({ success: true });
 }));
 

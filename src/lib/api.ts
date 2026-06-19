@@ -44,6 +44,8 @@ export const api = {
       request<{ success: boolean; resetUrl?: string }>('/auth/forgot-password', json('POST', { email })),
     resetPassword: (token: string, password: string) =>
       request<{ success: boolean }>('/auth/reset-password', json('POST', { token, password })),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ success: boolean }>('/auth/change-password', json('POST', { currentPassword, newPassword })),
   },
   loans: {
     list: () => request<Loan[]>('/loans'),

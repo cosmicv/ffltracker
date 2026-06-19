@@ -41,6 +41,15 @@ export async function clearSession(req: Request, res: Response) {
   res.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
+export async function clearOtherSessions(req: Request, userId: string) {
+  const currentSessionId = req.cookies?.[SESSION_COOKIE];
+  if (currentSessionId) {
+    await db.prepare('DELETE FROM sessions WHERE user_id = ? AND id <> ?').run(userId, currentSessionId);
+    return;
+  }
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+}
+
 export async function loadUser(req: AuthRequest, _res: Response, next: NextFunction) {
   const sessionId = req.cookies?.[SESSION_COOKIE];
   if (sessionId) {

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { Database } from '../types/database';
-import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, Mail } from 'lucide-react';
+import { PlusCircle, DollarSign, Users, TrendingUp, LogOut, MessageCircle, Shield, Mail, KeyRound } from 'lucide-react';
 import { CreateLoanModal } from '../components/CreateLoanModal';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
 import { UserManagement } from '../components/UserManagement';
 import { EmailLogs } from '../components/EmailLogs';
+import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 type TabType = 'loans' | 'users' | 'email_logs';
@@ -18,6 +19,7 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('loans');
   const isMasterAdmin = profile?.role === 'master_admin';
   const [stats, setStats] = useState({
@@ -68,6 +70,13 @@ export const AdminDashboard = () => {
                   {isMasterAdmin ? 'Master Admin' : 'Admin'}
                 </span>
               </span>
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className="flex items-center text-gray-600 hover:text-gray-900 transition"
+                title="Change password"
+              >
+                <KeyRound className="w-5 h-5" />
+              </button>
               <button
                 onClick={signOut}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition"
@@ -227,6 +236,9 @@ export const AdminDashboard = () => {
 
       {showFeedbackModal && (
         <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
+      )}
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
       )}
     </div>
   );

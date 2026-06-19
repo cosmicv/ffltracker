@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { Database } from '../types/database';
-import { DollarSign, CheckCircle, LogOut, MessageCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, LogOut, MessageCircle, KeyRound } from 'lucide-react';
 import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
+import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 
@@ -14,6 +15,7 @@ export const BorrowerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     fetchLoans();
@@ -44,6 +46,13 @@ export const BorrowerDashboard = () => {
               <span className="text-xs sm:text-sm text-gray-600 truncate max-w-[150px] sm:max-w-none">
                 {profile?.full_name}
               </span>
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className="flex items-center text-gray-600 hover:text-gray-900 transition"
+                title="Change password"
+              >
+                <KeyRound className="w-5 h-5" />
+              </button>
               <button
                 onClick={signOut}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition"
@@ -102,6 +111,9 @@ export const BorrowerDashboard = () => {
 
       {showFeedbackModal && (
         <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
+      )}
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
       )}
     </div>
   );
