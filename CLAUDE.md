@@ -16,13 +16,14 @@ npm run db:import -- "../Exports/6-19-26"
 
 - React 18, TypeScript, Vite, and Tailwind CSS
 - Express API in `server/`
-- SQLite database at `data/ffltracker.sqlite`
+- Turso/libSQL in Vercel, with local SQLite fallback
 - Argon2id password hashes
 - Server-side sessions stored in SQLite and sent through HTTP-only cookies
 - Resend for optional transactional email
 
 The Vite development server proxies `/api` to the Express server on port 3001.
-In production, the Express server serves the built `dist/` frontend.
+On Vercel, `api/index.ts` exposes the Express application as a function and
+`vercel.json` routes the Vite frontend separately.
 
 ## Roles
 
@@ -43,7 +44,9 @@ user by normalized email and links matching loans to the registered account.
 
 ## Environment variables
 
-- `DATABASE_PATH`: optional SQLite path; defaults to `data/ffltracker.sqlite`
+- `DATABASE_PATH`: optional local SQLite path; defaults to `data/ffltracker.sqlite`
+- `TURSO_DATABASE_URL`: remote Turso/libSQL URL
+- `TURSO_AUTH_TOKEN`: remote Turso authentication token
 - `PORT`: API port; defaults to `3001`
 - `APP_URL`: public application URL used in emails
 - `RESEND_API_KEY`: optional email provider key

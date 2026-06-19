@@ -34,9 +34,8 @@ for (const profile of profiles) {
   );
 }
 
-const importAll = db.transaction(() => {
-  for (const profile of profiles) {
-    db.prepare(`
+for (const profile of profiles) {
+    await db.prepare(`
       INSERT INTO users (id, email, full_name, role, registered, password_hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -54,22 +53,22 @@ const importAll = db.transaction(() => {
       passwordHashes.get(profile.id),
       profile.created_at,
     );
-  }
+}
 
-  const pendingByEmail = new Map<string, string>();
-  for (const loan of loans) {
+const pendingByEmail = new Map<string, string>();
+for (const loan of loans) {
     const email = loan.borrower_email.trim().toLowerCase();
     let borrowerId = loan.borrower_id || pendingByEmail.get(email);
     if (!borrowerId) {
-      const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string } | undefined;
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string } | undefined;
       borrowerId = existing?.id || crypto.randomUUID();
       pendingByEmail.set(email, borrowerId);
-      db.prepare(`
+      await db.prepare(`
         INSERT OR IGNORE INTO users (id, email, full_name, role, registered, created_at)
         VALUES (?, ?, ?, 'borrower', 0, ?)
       `).run(borrowerId, email, loan.borrower_name, loan.created_at);
     }
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO loans (
         id, borrower_user_id, lender_user_id, borrower_name, borrower_email,
         amount_cents, interest_rate, frequency, status, approved_at, start_date, notes, created_at
@@ -90,10 +89,10 @@ const importAll = db.transaction(() => {
       loan.notes || '',
       loan.created_at,
     );
-  }
+}
 
-  for (const repayment of repayments) {
-    db.prepare(`
+for (const repayment of repayments) {
+    await db.prepare(`
       INSERT OR IGNORE INTO repayments
       (id, loan_id, due_date, amount_cents, paid, paid_at, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -106,10 +105,10 @@ const importAll = db.transaction(() => {
       repayment.paid_at || null,
       repayment.created_at,
     );
-  }
+}
 
-  for (const item of feedback) {
-    db.prepare(`
+for (const item of feedback) {
+    await db.prepare(`
       INSERT OR IGNORE INTO feedback
       (id, user_id, user_email, user_name, message, type, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -117,10 +116,10 @@ const importAll = db.transaction(() => {
       item.id, item.user_id, item.user_email, item.user_name, item.message,
       item.type, item.status, item.created_at,
     );
-  }
+}
 
-  for (const log of emailLogs) {
-    db.prepare(`
+for (const log of emailLogs) {
+    await db.prepare(`
       INSERT OR IGNORE INTO email_logs
       (id, email_type, recipient_email, recipient_name, loan_id, subject, status,
        provider_message_id, error_message, sent_at)
@@ -130,12 +129,9 @@ const importAll = db.transaction(() => {
       log.loan_id || null, log.subject, log.status, log.provider_message_id || null,
       log.error_message || null, log.sent_at,
     );
-  }
-});
+}
 
-importAll();
-
-const report = db.prepare(`
+const report = await db.prepare(`
   SELECT
     (SELECT count(*) FROM users) AS users,
     (SELECT count(*) FROM users WHERE registered = 0) AS pending_borrowers,

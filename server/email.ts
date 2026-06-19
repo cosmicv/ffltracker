@@ -43,7 +43,7 @@ export async function sendEmail(input: SendEmailInput) {
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO email_logs (
       id, email_type, recipient_email, recipient_name, loan_id, subject,
       status, provider_message_id, error_message, sent_at

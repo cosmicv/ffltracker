@@ -1,17 +1,51 @@
-import 'dotenv/config';
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { createClient, type InStatement, type ResultSet } from '@libsql/client';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
 
-const dbPath = resolve(process.env.DATABASE_PATH || 'data/ffltracker.sqlite');
-mkdirSync(dirname(dbPath), { recursive: true });
+config({ path: ['.env.development.local', '.env.local', '.env'] });
 
-export const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-db.pragma('busy_timeout = 5000');
+const databaseUrl = process.env.TURSO_DATABASE_URL || `file:${resolve(process.env.DATABASE_PATH || 'data/ffltracker.sqlite')}`;
 
-db.exec(`
+export const client = createClient({
+  url: databaseUrl,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+function normalizeRows(result: ResultSet) {
+  return result.rows.map((row) => ({ ...row }) as Record<string, unknown>);
+}
+
+class Statement {
+  constructor(private readonly sql: string) {}
+
+  async all(...args: unknown[]) {
+    const result = await client.execute({ sql: this.sql, args: args as never[] });
+    return normalizeRows(result);
+  }
+
+  async get(...args: unknown[]) {
+    const rows = await this.all(...args);
+    return rows[0];
+  }
+
+  async run(...args: unknown[]) {
+    return client.execute({ sql: this.sql, args: args as never[] });
+  }
+}
+
+export const db = {
+  prepare(sql: string) {
+    return new Statement(sql);
+  },
+  exec(sql: string) {
+    return client.executeMultiple(sql);
+  },
+  batch(statements: InStatement[]) {
+    return client.batch(statements, 'write');
+  },
+};
+
+await db.exec(`
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
