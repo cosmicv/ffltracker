@@ -1,16 +1,14 @@
-import { User as SupabaseUser } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
-import { Building2, LogOut, User, CreditCard } from 'lucide-react';
+import { Building2, LogOut, User } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useSubscription } from '../hooks/useSubscription';
+import { AppUser } from '../lib/api';
 
 interface HeaderProps {
-  user: SupabaseUser | null;
+  user: AppUser | null;
 }
 
 export function Header({ user }: HeaderProps) {
   const { signOut } = useAuth();
-  const { activeSubscriptionName } = useSubscription();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -31,20 +29,6 @@ export function Header({ user }: HeaderProps) {
           </Link>
           
           <div className="flex items-center space-x-4">
-            {activeSubscriptionName && (
-              <span className="text-sm text-green-600 font-medium">
-                {activeSubscriptionName}
-              </span>
-            )}
-            
-            <Link
-              to="/subscription"
-              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-            >
-              <CreditCard className="h-4 w-4 mr-2" />
-              Subscription
-            </Link>
-            
             <div className="flex items-center space-x-2 text-sm text-gray-700">
               <User className="h-4 w-4" />
               <span>{user?.email}</span>

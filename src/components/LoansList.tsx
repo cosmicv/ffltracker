@@ -1,7 +1,7 @@
 import { Database } from '../types/database';
 import { TrendingUp, CheckCircle, UserCheck, UserX, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { BorrowerAccountModal } from './BorrowerAccountModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
@@ -37,33 +37,27 @@ export const LoansList = ({ loans, isAdmin, onUpdate }: LoansListProps) => {
     setLoading(true);
     try {
       const loanIds = loans.map(l => l.id);
-      const { data: repayments, error } = await supabase
-        .from('repayments')
-        .select('*')
-        .in('loan_id', loanIds);
-
-      if (error) throw error;
+      const [repayments, users] = await Promise.all([
+        api.repayments.list(loanIds),
+        isAdmin ? api.users.list() : Promise.resolve([]),
+      ]);
+      const registeredEmails = new Set(
+        users.filter(user => user.registered).map(user => user.email.toLowerCase()),
+      );
 
       const grouped = new Map<string, BorrowerGroup>();
 
       for (const loan of loans) {
         const key = loan.borrower_email.toLowerCase();
-        const loanRepayments = (repayments || []).filter(r => r.loan_id === loan.id && r.paid);
+        const loanRepayments = repayments.filter(r => r.loan_id === loan.id && r.paid);
         const paidForLoan = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
         const remainderForLoan = Number(loan.amount) - paidForLoan;
 
         if (!grouped.has(key)) {
-          let isRegistered = false;
-          if (isAdmin && loan.borrower_email) {
-            const { data } = await supabase.rpc('check_borrower_registered', {
-              borrower_email_param: loan.borrower_email,
-            });
-            isRegistered = data === true;
-          }
           grouped.set(key, {
             borrowerName: loan.borrower_name,
             borrowerEmail: loan.borrower_email,
-            isRegistered,
+            isRegistered: registeredEmails.has(key),
             loans: [],
             totalBorrowed: 0,
             totalPaid: 0,

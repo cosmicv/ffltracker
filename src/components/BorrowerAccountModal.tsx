@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, CheckCircle, DollarSign, Calendar, TrendingUp, ChevronDown, ChevronUp, UserCheck, UserX } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Database, RepaymentFrequency } from '../types/database';
-import { useAuth } from '../contexts/AuthContext';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
 type Repayment = Database['public']['Tables']['repayments']['Row'];
@@ -30,7 +29,6 @@ export const BorrowerAccountModal = ({
   onClose,
   onUpdate,
 }: BorrowerAccountModalProps) => {
-  const { user } = useAuth();
   const [loansWithPayments, setLoansWithPayments] = useState<LoanWithPayments[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedLoanId, setExpandedLoanId] = useState<string | null>(null);
@@ -58,12 +56,7 @@ export const BorrowerAccountModal = ({
     setLoading(true);
     try {
       const loanIds = loans.map(l => l.id);
-      const { data: repayments, error } = await supabase
-        .from('repayments')
-        .select('*')
-        .in('loan_id', loanIds);
-
-      if (error) throw error;
+      const repayments = await api.repayments.list(loanIds);
 
       const enriched = loans.map(loan => {
         const loanRepayments = (repayments || []).filter(r => r.loan_id === loan.id);
@@ -91,15 +84,7 @@ export const BorrowerAccountModal = ({
     setLoanSubmitting(true);
 
     try {
-      const { data: borrowerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', borrowerEmail)
-        .maybeSingle();
-
-      const { error } = await supabase.from('loans').insert({
-        lender_id: user?.id,
-        borrower_id: borrowerProfile?.id || null,
+      await api.loans.create({
         borrower_name: borrowerName,
         borrower_email: borrowerEmail,
         amount: parseFloat(newLoan.amount),
@@ -109,32 +94,8 @@ export const BorrowerAccountModal = ({
         notes: newLoan.notes,
       });
 
-      if (error) throw error;
-
       try {
-        const { data: lenderProfile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user?.id ?? '')
-          .maybeSingle();
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-invitation`;
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) throw new Error('Not authenticated');
-
-        await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            borrowerEmail,
-            borrowerName,
-            amount: newLoan.amount,
-            lenderName: lenderProfile?.full_name || 'A lender',
-          }),
-        });
+        await api.emails.invite(borrowerEmail, borrowerName);
       } catch (emailErr) {
         console.error('Email notification failed:', emailErr);
       }
@@ -155,7 +116,7 @@ export const BorrowerAccountModal = ({
     setPaymentSubmitting(true);
 
     try {
-      const { error } = await supabase.from('repayments').insert({
+      await api.repayments.create({
         loan_id: loan.id,
         amount: Number(paymentAmount),
         due_date: paymentDate,
@@ -163,11 +124,9 @@ export const BorrowerAccountModal = ({
         paid_at: new Date().toISOString(),
       });
 
-      if (error) throw error;
-
       const newTotalPaid = loan.totalPaid + Number(paymentAmount);
       if (newTotalPaid >= Number(loan.amount) && loan.status !== 'completed') {
-        await supabase.from('loans').update({ status: 'completed' }).eq('id', loan.id);
+        await api.loans.update(loan.id, { status: 'completed' });
       }
 
       setPaymentAmount('');
@@ -186,14 +145,13 @@ export const BorrowerAccountModal = ({
     if (!confirm('Delete this payment?')) return;
 
     try {
-      const { error } = await supabase.from('repayments').delete().eq('id', paymentId);
-      if (error) throw error;
+      await api.repayments.remove(paymentId);
 
       const deletedPayment = loan.repayments.find(r => r.id === paymentId);
       const newTotalPaid = loan.totalPaid - Number(deletedPayment?.amount || 0);
 
       if (newTotalPaid < Number(loan.amount) && loan.status === 'completed') {
-        await supabase.from('loans').update({ status: 'active' }).eq('id', loan.id);
+        await api.loans.update(loan.id, { status: 'active' });
       }
 
       onUpdate();
@@ -207,9 +165,7 @@ export const BorrowerAccountModal = ({
     if (!confirm('Permanently delete this loan and all its payments? This cannot be undone.')) return;
 
     try {
-      await supabase.from('repayments').delete().eq('loan_id', loan.id);
-      const { error } = await supabase.from('loans').delete().eq('id', loan.id);
-      if (error) throw error;
+      await api.loans.remove(loan.id);
       onUpdate();
     } catch (err) {
       console.error('Error deleting loan:', err);
@@ -222,8 +178,7 @@ export const BorrowerAccountModal = ({
     if (!confirm(`${newStatus === 'completed' ? 'Mark' : 'Reactivate'} this loan?`)) return;
 
     try {
-      const { error } = await supabase.from('loans').update({ status: newStatus }).eq('id', loan.id);
-      if (error) throw error;
+      await api.loans.update(loan.id, { status: newStatus });
       onUpdate();
     } catch (err) {
       console.error('Error updating loan status:', err);

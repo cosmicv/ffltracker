@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Database } from '../types/database';
 import { DollarSign, CheckCircle, LogOut, MessageCircle } from 'lucide-react';
 import { LoansList } from '../components/LoansList';
@@ -21,18 +21,9 @@ export const BorrowerDashboard = () => {
 
   const fetchLoans = async () => {
     try {
-      const { data, error } = await supabase
-        .from('loans')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching loans:', error);
-        throw error;
-      }
-
-      setLoans(data || []);
-      setActiveLoans(data || []);
+      const data = await api.loans.list();
+      setLoans(data);
+      setActiveLoans(data.filter(loan => loan.status === 'active' || loan.status === 'approved'));
     } catch (error) {
       console.error('Error fetching loans:', error);
     } finally {

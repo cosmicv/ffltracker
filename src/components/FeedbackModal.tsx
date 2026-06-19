@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, MessageCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface FeedbackModalProps {
@@ -8,7 +8,7 @@ interface FeedbackModalProps {
 }
 
 export const FeedbackModal = ({ onClose }: FeedbackModalProps) => {
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
   const [type, setType] = useState<'feature_request' | 'problem_report'>('feature_request');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,34 +29,7 @@ export const FeedbackModal = ({ onClose }: FeedbackModalProps) => {
     try {
       if (!user?.id) throw new Error('Not authenticated');
 
-      const { error: dbError } = await supabase
-        .from('feedback')
-        .insert({
-          user_id: user.id,
-          user_email: user?.email || '',
-          user_name: profile?.full_name || 'Unknown',
-          message: message.trim(),
-          type,
-        });
-
-      if (dbError) throw dbError;
-
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-feedback-email`;
-      const headers = {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      };
-
-      await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          user_email: user?.email || '',
-          user_name: profile?.full_name || 'Unknown',
-          message: message.trim(),
-          type,
-        }),
-      });
+      await api.feedback.create(message.trim(), type);
 
       setSuccess(true);
       setTimeout(() => {

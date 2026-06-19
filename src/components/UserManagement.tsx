@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { UserRole } from '../types/database';
 import { Trash2, Users, Search, AlertTriangle, X, Shield, User, CheckCircle, Mail, Loader2 } from 'lucide-react';
 
@@ -37,35 +37,7 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const [{ data: profileData, error: profileError }, { data: loanData, error: loanError }] = await Promise.all([
-        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('loans').select('borrower_email, borrower_name, created_at').order('created_at', { ascending: false }),
-      ]);
-
-      if (profileError) throw profileError;
-      if (loanError) throw loanError;
-
-      const profiles: Profile[] = profileData || [];
-      const profileEmails = new Set(profiles.map(p => p.email.toLowerCase()));
-
-      const seen = new Set<string>();
-      const loanOnlyUsers: Profile[] = [];
-      for (const loan of loanData || []) {
-        const emailKey = loan.borrower_email.toLowerCase();
-        if (!profileEmails.has(emailKey) && !seen.has(emailKey)) {
-          seen.add(emailKey);
-          loanOnlyUsers.push({
-            id: emailKey,
-            email: loan.borrower_email,
-            full_name: loan.borrower_name,
-            role: 'borrower' as UserRole,
-            created_at: loan.created_at,
-            registered: false,
-          });
-        }
-      }
-
-      setUsers([...loanOnlyUsers, ...profiles]);
+      setUsers(await api.users.list() as Profile[]);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to load users');
@@ -78,32 +50,7 @@ export const UserManagement = () => {
     setResendingInvite(u.id);
     setError('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const { data: lenderProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-invite`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            borrowerEmail: u.email,
-            borrowerName: u.full_name || u.email,
-            lenderName: lenderProfile?.full_name || 'Your lender',
-          }),
-        }
-      );
-
-      const result = await response.json();
+      const result = await api.users.resendInvite(u.id);
       if (!result.success) {
         throw new Error(result.error || 'Failed to send invite');
       }
@@ -121,32 +68,7 @@ export const UserManagement = () => {
     setError('');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ userId: deleteTarget.id }),
-        }
-      );
-
-      let result: Record<string, string>;
-      try {
-        result = await response.json();
-      } catch {
-        throw new Error(`Server error (${response.status})`);
-      }
-
-      if (!response.ok) {
-        throw new Error(result.error || result.msg || result.message || `Server error (${response.status})`);
-      }
+      await api.users.remove(deleteTarget.id);
 
       setDeletedName(deleteTarget.full_name || deleteTarget.email);
       setDeleteSuccess(true);
@@ -292,7 +214,7 @@ export const UserManagement = () => {
                             {resendingInvite === u.id ? 'Sending...' : 'Resend Invite'}
                           </span>
                         </button>
-                        {u.id.includes('@') ? null : (
+                        {!u.registered ? null : (
                           <button
                             onClick={() => setDeleteTarget(u)}
                             className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { CheckCircle, XCircle, Mail, RefreshCw } from 'lucide-react';
 
 interface EmailLog {
@@ -34,14 +34,8 @@ export const EmailLogs = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('email_logs')
-        .select('*')
-        .order('sent_at', { ascending: false })
-        .limit(200);
-
-      if (error) throw error;
-      setLogs(data || []);
+      const data = await api.emailLogs.list();
+      setLogs(data as unknown as EmailLog[]);
     } catch (err) {
       console.error('Error fetching email logs:', err);
     } finally {

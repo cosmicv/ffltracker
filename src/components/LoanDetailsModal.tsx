@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, CheckCircle, DollarSign, Calendar } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Database } from '../types/database';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
@@ -24,26 +24,9 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
     fetchRepayments();
   }, [loan.id]);
 
-  const getFunctionHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Not authenticated');
-
-    return {
-      'Authorization': `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    };
-  };
-
   const fetchRepayments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('repayments')
-        .select('*')
-        .eq('loan_id', loan.id)
-        .order('due_date', { ascending: false });
-
-      if (error) throw error;
-      setRepayments(data || []);
+      setRepayments(await api.repayments.list([loan.id]));
     } catch (error) {
       console.error('Error fetching repayments:', error);
     } finally {
@@ -57,9 +40,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('repayments')
-        .insert({
+      await api.repayments.create({
           loan_id: loan.id,
           amount: Number(paymentAmount),
           due_date: paymentDate,
@@ -67,13 +48,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
           paid_at: new Date().toISOString(),
         });
 
-      if (error) throw error;
-
-      // Fetch updated repayments to check if loan is paid off
-      const { data: updatedRepayments } = await supabase
-        .from('repayments')
-        .select('*')
-        .eq('loan_id', loan.id);
+      const updatedRepayments = await api.repayments.list([loan.id]);
 
       const totalPaid = (updatedRepayments || [])
         .filter(r => r.paid)
@@ -81,36 +56,10 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
 
       // Auto-complete loan if fully paid
       if (totalPaid >= Number(loan.amount) && loan.status !== 'completed') {
-        await supabase
-          .from('loans')
-          .update({ status: 'completed' })
-          .eq('id', loan.id);
+        await api.loans.update(loan.id, { status: 'completed' });
 
         try {
-          const { data: lenderProfile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', loan.lender_id ?? '')
-            .maybeSingle();
-
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
-
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: await getFunctionHeaders(),
-            body: JSON.stringify({
-              borrowerEmail: loan.borrower_email,
-              borrowerName: loan.borrower_name,
-              amount: loan.amount.toString(),
-              lenderName: lenderProfile?.full_name || 'Your lender',
-              status: 'completed',
-            }),
-          });
-
-          const emailResult = await response.json();
-          if (!emailResult.success) {
-            console.error('Email notification failed:', emailResult);
-          }
+          await api.emails.status(loan, 'completed');
         } catch (emailError) {
           console.error('Exception sending email:', emailError);
         }
@@ -133,18 +82,9 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
     if (!confirm('Are you sure you want to delete this payment?')) return;
 
     try {
-      const { error } = await supabase
-        .from('repayments')
-        .delete()
-        .eq('id', paymentId);
+      await api.repayments.remove(paymentId);
 
-      if (error) throw error;
-
-      // Fetch updated repayments to check if loan should still be completed
-      const { data: updatedRepayments } = await supabase
-        .from('repayments')
-        .select('*')
-        .eq('loan_id', loan.id);
+      const updatedRepayments = await api.repayments.list([loan.id]);
 
       const totalPaid = (updatedRepayments || [])
         .filter(r => r.paid)
@@ -152,15 +92,9 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
 
       // Update loan status based on whether it's still fully paid
       if (totalPaid >= Number(loan.amount) && loan.status !== 'completed') {
-        await supabase
-          .from('loans')
-          .update({ status: 'completed' })
-          .eq('id', loan.id);
+        await api.loans.update(loan.id, { status: 'completed' });
       } else if (totalPaid < Number(loan.amount) && loan.status === 'completed') {
-        await supabase
-          .from('loans')
-          .update({ status: 'active' })
-          .eq('id', loan.id);
+        await api.loans.update(loan.id, { status: 'active' });
       }
 
       fetchRepayments();
@@ -175,38 +109,10 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
     if (!confirm('Mark this loan as completed? This action can be reversed.')) return;
 
     try {
-      const { error } = await supabase
-        .from('loans')
-        .update({ status: 'completed' })
-        .eq('id', loan.id);
-
-      if (error) throw error;
+      await api.loans.update(loan.id, { status: 'completed' });
 
       try {
-        const { data: lenderProfile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', loan.lender_id ?? '')
-          .maybeSingle();
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: await getFunctionHeaders(),
-          body: JSON.stringify({
-            borrowerEmail: loan.borrower_email,
-            borrowerName: loan.borrower_name,
-            amount: loan.amount.toString(),
-            lenderName: lenderProfile?.full_name || 'Your lender',
-            status: 'completed',
-          }),
-        });
-
-        const emailResult = await response.json();
-        if (!emailResult.success) {
-          console.error('Email notification failed:', emailResult);
-        }
+        await api.emails.status(loan, 'completed');
       } catch (emailError) {
         console.error('Exception sending email:', emailError);
       }
@@ -224,12 +130,7 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
     if (!confirm('Reactivate this loan?')) return;
 
     try {
-      const { error } = await supabase
-        .from('loans')
-        .update({ status: 'active' })
-        .eq('id', loan.id);
-
-      if (error) throw error;
+      await api.loans.update(loan.id, { status: 'active' });
 
       await onUpdate();
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -245,47 +146,12 @@ export const LoanDetailsModal = ({ loan, onClose, onUpdate }: LoanDetailsModalPr
 
     try {
       try {
-        const { data: lenderProfile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', loan.lender_id ?? '')
-          .maybeSingle();
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-loan-status-notification`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: await getFunctionHeaders(),
-          body: JSON.stringify({
-            borrowerEmail: loan.borrower_email,
-            borrowerName: loan.borrower_name,
-            amount: loan.amount.toString(),
-            lenderName: lenderProfile?.full_name || 'Your lender',
-            status: 'deleted',
-          }),
-        });
-
-        const emailResult = await response.json();
-        if (!emailResult.success) {
-          console.error('Email notification failed:', emailResult);
-        }
+        await api.emails.status(loan, 'deleted');
       } catch (emailError) {
         console.error('Exception sending email:', emailError);
       }
 
-      const { error: repaymentsError } = await supabase
-        .from('repayments')
-        .delete()
-        .eq('loan_id', loan.id);
-
-      if (repaymentsError) throw repaymentsError;
-
-      const { error: loanError } = await supabase
-        .from('loans')
-        .delete()
-        .eq('id', loan.id);
-
-      if (loanError) throw loanError;
+      await api.loans.remove(loan.id);
 
       await onUpdate();
       await new Promise(resolve => setTimeout(resolve, 100));

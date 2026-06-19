@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { DollarSign, Eye, EyeOff, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export function ResetPasswordPage() {
@@ -12,28 +12,9 @@ export function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
-  const [sessionError, setSessionError] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setSessionReady(true);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setSessionReady(true);
-      } else {
-        setTimeout(() => {
-          supabase.auth.getSession().then(({ data: d }) => {
-            if (!d.session) setSessionError(true);
-          });
-        }, 1500);
-      }
-    });
-  }, []);
+  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const sessionReady = Boolean(token);
+  const sessionError = !token;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +33,7 @@ export function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      await api.auth.resetPassword(token, password);
       setSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
