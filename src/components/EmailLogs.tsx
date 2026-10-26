@@ -21,6 +21,7 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   status_notification: 'Status Notification',
   account_statement: 'Account Statement',
   account_summary: 'Account Summary',
+  monthly_account_summary: 'Monthly Account Summary',
 };
 
 export const EmailLogs = () => {

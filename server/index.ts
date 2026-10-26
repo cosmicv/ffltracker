@@ -21,6 +21,7 @@ import {
 import { db, loanRow, publicUser, repaymentRow } from './db.js';
 import { sendEmail, getEmailSettings } from './email.js';
 import { sendAccountSummary } from './account-summary.js';
+import { sendMonthlySummaries } from './monthly-summaries.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -519,50 +520,21 @@ app.post('/api/emails/status', requireRole('admin', 'master_admin'), asyncRoute(
   res.json(result);
 }));
 
-app.post('/api/jobs/monthly-statements', asyncRoute(async (req, res) => {
-  const secret = req.header('x-cron-secret');
-  const isAdmin = req.authUser?.role === 'master_admin';
-  if (!isAdmin && (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET)) {
+const monthlyStatements = asyncRoute(async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const authorizedCron = Boolean(secret) && (
+    req.header('authorization') === 'Bearer ' + secret || req.header('x-cron-secret') === secret
+  );
+  if (!authorizedCron && req.authUser?.role !== 'master_admin') {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
-  const loans = await db.prepare(`
-    SELECT * FROM loans WHERE status IN ('active', 'approved') ORDER BY borrower_email
-  `).all() as Record<string, unknown>[];
-  const byBorrower = new Map<string, Record<string, unknown>[]>();
-  for (const loan of loans) {
-    const email = String(loan.borrower_email).toLowerCase();
-    byBorrower.set(email, [...(byBorrower.get(email) || []), loan]);
-  }
-  const statementMonth = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const subject = `Monthly Loan Statement - ${statementMonth}`;
-  let sent = 0;
-  let skipped = 0;
-  for (const [email, borrowerLoans] of byBorrower) {
-    const alreadySent = await db.prepare(`
-      SELECT id FROM email_logs
-      WHERE email_type = 'payment_reminder' AND lower(recipient_email) = lower(?)
-        AND subject = ? AND status = 'sent'
-      LIMIT 1
-    `).get(email, subject);
-    if (alreadySent && req.body?.force !== true) {
-      skipped += 1;
-      continue;
-    }
-    const totalCents = borrowerLoans.reduce((sum, loan) => sum + Number(loan.amount_cents), 0);
-    const borrowerName = String(borrowerLoans[0].borrower_name);
-    await sendEmail({
-      type: 'payment_reminder',
-      to: email,
-      name: borrowerName,
-      subject,
-      html: `<p>Hello ${borrowerName},</p><p>You have ${borrowerLoans.length} active loan${borrowerLoans.length === 1 ? '' : 's'} with $${(totalCents / 100).toFixed(2)} in original principal.</p><p><a href="${appUrl}/login">View your account</a></p>`,
-      loanId: null,
-    });
-    sent += 1;
-  }
-  res.json({ success: true, processed: sent, skipped });
-}));
+  res.set('Cache-Control', 'no-store');
+  const result = await sendMonthlySummaries(appUrl, req.query.dryRun === '1');
+  res.status(result.success ? 200 : 502).json(result);
+});
+app.get('/api/jobs/monthly-statements', monthlyStatements);
+app.post('/api/jobs/monthly-statements', monthlyStatements);
 
 const distPath = resolve('dist');
 if (existsSync(distPath)) {

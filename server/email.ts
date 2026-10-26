@@ -8,6 +8,7 @@ interface SendEmailInput {
   subject: string;
   html: string;
   loanId?: string | null;
+  idempotencyKey?: string;
 }
 
 export async function getEmailSettings() {
@@ -34,6 +35,7 @@ export async function sendEmail(input: SendEmailInput) {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
         },
         body: JSON.stringify({
           from: sender,

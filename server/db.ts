@@ -56,6 +56,14 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS monthly_summary_deliveries (
+  month TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'failed')),
+  claimed_at TEXT NOT NULL,
+  PRIMARY KEY (month, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,

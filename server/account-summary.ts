@@ -8,7 +8,7 @@ const money = (cents: unknown) => (Number(cents) / 100).toLocaleString('en-US', 
   style: 'currency', currency: 'USD',
 });
 
-export async function sendAccountSummary(user: Record<string, unknown>, appUrl: string) {
+export async function sendAccountSummary(user: Record<string, unknown>, appUrl: string, month?: string) {
   const loans = await db.prepare(`
     SELECT l.*, COALESCE(SUM(CASE WHEN r.paid = 1 THEN r.amount_cents ELSE 0 END), 0) AS paid_cents,
       COALESCE(SUM(CASE WHEN r.paid = 0 THEN r.amount_cents ELSE 0 END), 0) AS unpaid_cents
@@ -20,10 +20,11 @@ export async function sendAccountSummary(user: Record<string, unknown>, appUrl: 
   const total = (field: string) => loans.reduce((sum, loan) => sum + Number(loan[field]), 0);
   const accountPath = user.registered ? '/login' : `/signup?email=${encodeURIComponent(String(user.email))}`;
   const result = await sendEmail({
-    type: 'account_summary',
+    type: month ? 'monthly_account_summary' : 'account_summary',
     to: String(user.email),
     name: String(user.full_name),
-    subject: 'Your FFLTracker Account Summary',
+    subject: month ? `Your FFLTracker Account Summary - ${month}` : 'Your FFLTracker Account Summary',
+    idempotencyKey: month ? `monthly-summary/${month}/${user.id}` : undefined,
     html: `<h1>Account Summary</h1><p>Hello ${escapeHtml(user.full_name)},</p>
       ${loans.length ? `<p>You have ${loans.length} loan${loans.length === 1 ? '' : 's'} on your account.</p>
       <table border="1" cellpadding="8" cellspacing="0"><thead><tr><th>Status</th><th>Original loan amount</th><th>Recorded payments</th><th>Unpaid scheduled payments</th></tr></thead><tbody>${rows}</tbody></table>
