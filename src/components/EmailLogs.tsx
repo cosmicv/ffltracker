@@ -20,6 +20,7 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   payment_reminder: 'Payment Reminder',
   status_notification: 'Status Notification',
   account_statement: 'Account Statement',
+  account_summary: 'Account Summary',
 };
 
 export const EmailLogs = () => {

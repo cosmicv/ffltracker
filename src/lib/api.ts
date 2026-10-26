@@ -64,6 +64,8 @@ export const api = {
     remove: (id: string) => request<{ success: boolean }>(`/users/${id}`, json('DELETE')),
     resendInvite: (id: string) =>
       request<{ success: boolean; error?: string }>(`/users/${id}/resend-invite`, json('POST')),
+    sendAccountSummary: (id: string) =>
+      request<{ success: boolean; error?: string }>(`/users/${id}/account-summary`, json('POST')),
   },
   emailSettings: {
     get: () => request<{ configured: boolean; sender: string }>('/email-settings'),

@@ -20,6 +20,7 @@ import {
 } from './auth.js';
 import { db, loanRow, publicUser, repaymentRow } from './db.js';
 import { sendEmail, getEmailSettings } from './email.js';
+import { sendAccountSummary } from './account-summary.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -421,6 +422,16 @@ app.post('/api/users/:id/resend-invite', requireRole('admin', 'master_admin'), a
     html: `<p>Hello ${borrower.full_name},</p><p>You have loans available to view.</p><p><a href="${signupUrl}">Create your account</a></p>`,
   });
   res.json(result);
+}));
+
+app.post('/api/users/:id/account-summary', requireRole('master_admin'), asyncRoute(async (req, res) => {
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(String(req.params.id));
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  const result = await sendAccountSummary(user, appUrl);
+  res.status(result.success ? 200 : 502).json(result);
 }));
 
 app.get('/api/email-settings', requireRole('master_admin'), asyncRoute(async (_req, res) => {

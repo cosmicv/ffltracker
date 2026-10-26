@@ -23,6 +23,7 @@ export const UserManagement = () => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
+  const [sendingSummary, setSendingSummary] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -59,6 +60,21 @@ export const UserManagement = () => {
       setError(err instanceof Error ? err.message : 'Failed to send invite');
     } finally {
       setResendingInvite(null);
+    }
+  };
+
+  const handleSendSummary = async (u: Profile) => {
+    setSendingSummary(u.id);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const result = await api.users.sendAccountSummary(u.id);
+      if (!result.success) throw new Error(result.error || 'Failed to send account summary');
+      setSuccessMsg(`Account summary sent to ${u.email}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send account summary');
+    } finally {
+      setSendingSummary(null);
     }
   };
 
@@ -197,6 +213,16 @@ export const UserManagement = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => handleSendSummary(u)}
+                      disabled={sendingSummary !== null}
+                      title={`Send account summary to ${u.email}`}
+                      aria-label={`Send account summary to ${u.email}`}
+                      className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sendingSummary === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                      <span>{sendingSummary === u.id ? 'Sending...' : 'Send Account Summary'}</span>
+                    </button>
                     {u.role !== 'master_admin' ? (
                       <div className="inline-flex items-center gap-2">
                         <button
