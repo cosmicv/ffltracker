@@ -10,8 +10,16 @@ interface SendEmailInput {
   loanId?: string | null;
 }
 
+export async function getEmailSettings() {
+  const saved = await db.prepare('SELECT api_key, sender FROM email_settings WHERE id = 1').get();
+  return {
+    apiKey: String(saved?.api_key || process.env.RESEND_API_KEY || ''),
+    sender: String(saved?.sender || process.env.EMAIL_FROM || 'Family & Friends Loan Tracker <noreply@ffltracker.app>'),
+  };
+}
+
 export async function sendEmail(input: SendEmailInput) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const { apiKey, sender } = await getEmailSettings();
   let status = 'sent';
   let providerMessageId: string | null = null;
   let errorMessage: string | null = null;
@@ -28,7 +36,7 @@ export async function sendEmail(input: SendEmailInput) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'Family & Friends Loan Tracker <noreply@ffltracker.app>',
+          from: sender,
           to: [input.to],
           subject: input.subject,
           html: input.html,

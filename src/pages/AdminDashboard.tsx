@@ -8,10 +8,11 @@ import { LoansList } from '../components/LoansList';
 import { FeedbackModal } from '../components/FeedbackModal';
 import { UserManagement } from '../components/UserManagement';
 import { EmailLogs } from '../components/EmailLogs';
+import { EmailSettings } from '../components/EmailSettings';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
 type Loan = Database['public']['Tables']['loans']['Row'];
-type TabType = 'loans' | 'users' | 'email_logs';
+type TabType = 'loans' | 'users' | 'email_logs' | 'email_settings';
 
 export const AdminDashboard = () => {
   const { profile, signOut } = useAuth();
@@ -165,6 +166,11 @@ export const AdminDashboard = () => {
                   <Mail className="w-4 h-4" />
                   Email Logs
                 </button>
+                <button onClick={() => setActiveTab('email_settings')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'email_settings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                  <KeyRound className="w-4 h-4" />
+                  Email Settings
+                </button>
               </div>
             )}
 
@@ -201,6 +207,8 @@ export const AdminDashboard = () => {
                 <UserManagement />
               </div>
             )}
+
+            {isMasterAdmin && activeTab === 'email_settings' && <EmailSettings />}
 
             {activeTab === 'email_logs' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

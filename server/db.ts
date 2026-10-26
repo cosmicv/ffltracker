@@ -46,6 +46,11 @@ export const db = {
 };
 
 await db.exec(`
+CREATE TABLE IF NOT EXISTS email_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  api_key TEXT NOT NULL,
+  sender TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

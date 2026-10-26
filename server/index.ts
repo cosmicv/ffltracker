@@ -19,7 +19,7 @@ import {
   type AuthRequest,
 } from './auth.js';
 import { db, loanRow, publicUser, repaymentRow } from './db.js';
-import { sendEmail } from './email.js';
+import { sendEmail, getEmailSettings } from './email.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -421,6 +421,36 @@ app.post('/api/users/:id/resend-invite', requireRole('admin', 'master_admin'), a
     html: `<p>Hello ${borrower.full_name},</p><p>You have loans available to view.</p><p><a href="${signupUrl}">Create your account</a></p>`,
   });
   res.json(result);
+}));
+
+app.get('/api/email-settings', requireRole('master_admin'), asyncRoute(async (_req, res) => {
+  const settings = await getEmailSettings();
+  res.set('Cache-Control', 'no-store');
+  res.json({ configured: Boolean(settings.apiKey), sender: settings.sender });
+}));
+
+app.put('/api/email-settings', requireRole('master_admin'), asyncRoute(async (req, res) => {
+  const { apiKey, sender } = req.body;
+  if (typeof sender !== 'string' || sender.length > 254 || /[\r\n]/.test(sender) ||
+      !/^(?:[^<>]+ <)?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(sender.trim())) {
+    res.status(400).json({ error: 'Enter a valid sender email, optionally as Name <email@example.com>' });
+    return;
+  }
+  if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 512 ||
+      (apiKey.trim() && !/^re_[A-Za-z0-9_-]+$/.test(apiKey.trim())))) {
+    res.status(400).json({ error: 'Enter a valid Resend API key starting with re_' });
+    return;
+  }
+  const current = await getEmailSettings();
+  const key = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : current.apiKey;
+  if (!key) {
+    res.status(400).json({ error: 'A Resend API key is required' });
+    return;
+  }
+  await db.prepare(`INSERT INTO email_settings (id, api_key, sender) VALUES (1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET api_key = excluded.api_key, sender = excluded.sender`).run(key, sender.trim());
+  res.set('Cache-Control', 'no-store');
+  res.json({ configured: true, sender: sender.trim() });
 }));
 
 app.get('/api/email-logs', requireRole('admin', 'master_admin'), asyncRoute(async (_req, res) => {

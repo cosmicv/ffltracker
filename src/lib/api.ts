@@ -65,6 +65,11 @@ export const api = {
     resendInvite: (id: string) =>
       request<{ success: boolean; error?: string }>(`/users/${id}/resend-invite`, json('POST')),
   },
+  emailSettings: {
+    get: () => request<{ configured: boolean; sender: string }>('/email-settings'),
+    save: (apiKey: string, sender: string) =>
+      request<{ configured: boolean; sender: string }>('/email-settings', json('PUT', { apiKey, sender })),
+  },
   emailLogs: {
     list: () => request<Array<Record<string, string | null>>>('/email-logs'),
   },
